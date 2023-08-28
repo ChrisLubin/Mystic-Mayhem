@@ -84,7 +84,7 @@ public class PlayerManager : NetworkedStaticInstanceWithLogger<PlayerManager>
             return;
         }
 
-        Vector3 randomSpawnPoint = new(UnityEngine.Random.Range(this._playerSpawnArea.position.x - this._playerSpawnMaxDistance, this._playerSpawnArea.position.x + this._playerSpawnMaxDistance), 0, UnityEngine.Random.Range(this._playerSpawnArea.position.z - this._playerSpawnMaxDistance, this._playerSpawnArea.position.z + this._playerSpawnMaxDistance));
+        Vector3 randomSpawnPoint = new(UnityEngine.Random.Range(this._playerSpawnArea.position.x - this._playerSpawnMaxDistance, this._playerSpawnArea.position.x + this._playerSpawnMaxDistance), this._playerSpawnArea.position.y, UnityEngine.Random.Range(this._playerSpawnArea.position.z - this._playerSpawnMaxDistance, this._playerSpawnArea.position.z + this._playerSpawnMaxDistance));
         Transform playerTransform = Instantiate(this._playerPrefab, randomSpawnPoint, this._playerSpawnArea.rotation);
         NetworkObject playerNetworkObject = playerTransform.GetComponent<NetworkObject>();
         playerNetworkObject.SpawnWithOwnership(clientId);
