@@ -361,7 +361,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4531bb47552eb140969e8b8bc52566c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _audioListener: {fileID: 5253867847977386612}
+  _audioListener: {fileID: 0}
 --- !u!114 &1311808670134292616
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -568,7 +568,6 @@ GameObject:
   m_Component:
   - component: {fileID: 3340677507876775737}
   - component: {fileID: 3340677507876775742}
-  - component: {fileID: 5253867847977386612}
   m_Layer: 0
   m_Name: FirstPersonCamera
   m_TagString: Untagged
@@ -630,14 +629,6 @@ MonoBehaviour:
         m_Calls: []
   m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 3340677506406205311}
---- !u!81 &5253867847977386612
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3340677507876775743}
-  m_Enabled: 0
 --- !u!1 &4336469570927661344
 GameObject:
   m_ObjectHideFlags: 0

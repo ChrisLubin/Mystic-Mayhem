@@ -10,8 +10,6 @@ public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
     private CharacterController _characterController;
     private ThirdPersonController _thirdPersonController;
 
-    [SerializeField] private AudioListener _audioListener;
-
     public static event Action<ulong, PlayerController> OnSpawn;
 
     private void Awake()
@@ -33,7 +31,6 @@ public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
         this._cameraController.OnHoverCameraReached += this.OnHoverCameraReached;
         this._characterController.enabled = true;
         this._thirdPersonController.enabled = true;
-        this._audioListener.enabled = true;
     }
 
     public override void OnDestroy()
