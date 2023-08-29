@@ -361,7 +361,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4531bb47552eb140969e8b8bc52566c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _audioListener: {fileID: 0}
 --- !u!114 &1311808670134292616
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -615,7 +614,7 @@ MonoBehaviour:
     FieldOfView: 40
     OrthographicSize: 10
     NearClipPlane: 0.45
-    FarClipPlane: 500
+    FarClipPlane: 1500
     Dutch: 0
     ModeOverride: 0
     LensShift: {x: 0, y: 0}
