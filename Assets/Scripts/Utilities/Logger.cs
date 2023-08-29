@@ -43,7 +43,7 @@ public abstract class WithLogger<T> : MonoBehaviour where T : MonoBehaviour
 {
     protected Logger _logger;
 
-    private void Awake()
+    protected virtual void Awake()
     {
         this._logger = new Logger((this as T).ToString());
     }
