@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
 {
     private PlayerCameraController _cameraController;
-    private PlayerInput _input;
+    private UnityEngine.InputSystem.PlayerInput _input;
     private CharacterController _characterController;
     private ThirdPersonController _thirdPersonController;
 
@@ -15,7 +15,7 @@ public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
     private void Awake()
     {
         this._cameraController = GetComponent<PlayerCameraController>();
-        this._input = GetComponent<PlayerInput>();
+        this._input = GetComponent<UnityEngine.InputSystem.PlayerInput>();
         this._characterController = GetComponent<CharacterController>();
         this._thirdPersonController = GetComponent<ThirdPersonController>();
     }
