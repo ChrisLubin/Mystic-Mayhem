@@ -45,7 +45,7 @@ public abstract class WithLogger<T> : MonoBehaviour where T : MonoBehaviour
 
     protected virtual void Awake()
     {
-        this._logger = new Logger((this as T).ToString());
+        this._logger = new Logger(this.name);
     }
 }
 
@@ -56,7 +56,7 @@ public abstract class StaticInstanceWithLogger<T> : StaticInstance<T> where T : 
     protected override void Awake()
     {
         base.Awake();
-        this._logger = new Logger((this as T).ToString());
+        this._logger = new Logger(this.name);
     }
 }
 
@@ -66,7 +66,7 @@ public abstract class NetworkBehaviourWithLogger<T> : NetworkBehaviour where T :
 
     protected virtual void Awake()
     {
-        this._logger = new Logger((this as T).ToString());
+        this._logger = new Logger(this.name);
     }
 }
 
@@ -77,6 +77,6 @@ public abstract class NetworkedStaticInstanceWithLogger<T> : NetworkedStaticInst
     protected override void Awake()
     {
         base.Awake();
-        this._logger = new Logger((this as T).ToString());
+        this._logger = new Logger(this.name);
     }
 }

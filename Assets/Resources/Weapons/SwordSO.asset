@@ -15,3 +15,5 @@ MonoBehaviour:
   ModelPrefab: {fileID: 4303496384816670106, guid: da8b953a20356424ea393c550ed45ba4,
     type: 3}
   Name: 1
+  LightAttackOneId: 1
+  HeavyAttackOneId: 2

@@ -9,11 +9,13 @@ using UnityEngine;
 /// </summary>
 public static class ResourceSystem
 {
+    private static Logger _LOGGER;
     private static List<WeaponSO> _WEAPON_SOS;
     private static Dictionary<WeaponName, WeaponSO> _WEAPON_SOS_DICT;
 
-    private static void AssembleResources()
+    private static void Init()
     {
+        _LOGGER = new("ResourceSystem");
         _WEAPON_SOS = Resources.LoadAll<WeaponSO>("Weapons").ToList();
         _WEAPON_SOS_DICT = _WEAPON_SOS.ToDictionary(w => w.Name, r => r);
     }
@@ -21,8 +23,14 @@ public static class ResourceSystem
     public static WeaponSO GetWeapon(WeaponName weaponName)
     {
         if (_WEAPON_SOS == null)
-            AssembleResources();
+            Init();
+        if (weaponName == WeaponName.None)
+            return null;
 
-        return _WEAPON_SOS_DICT[weaponName];
+        WeaponSO weaponSO = _WEAPON_SOS_DICT[weaponName];
+        if (weaponSO == null)
+            _LOGGER.Log("Couldn't find weapon SO", Logger.LogLevel.Warning);
+
+        return weaponSO;
     }
 }
