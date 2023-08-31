@@ -6,6 +6,7 @@ using System.Linq;
 public class PlayerWeaponManager : NetworkBehaviorAutoDisable<PlayerWeaponManager>
 {
     private PlayerNetworkController _networkController;
+    private PlayerAnimationController _animationController;
 
     [SerializeField] private WeaponName _weaponOnSpawnName;
 
@@ -15,6 +16,7 @@ public class PlayerWeaponManager : NetworkBehaviorAutoDisable<PlayerWeaponManage
     private void Awake()
     {
         this._networkController = GetComponent<PlayerNetworkController>();
+        this._animationController = GetComponent<PlayerAnimationController>();
         this._weaponDetailsDict = this._weaponDetailsList.ToDictionary(w => w.Name, w => w);
         this._networkController.CurrentWeaponName.OnValueChanged += this.OnCurrentWeaponChange;
     }
@@ -39,7 +41,7 @@ public class PlayerWeaponManager : NetworkBehaviorAutoDisable<PlayerWeaponManage
 
     private void Update()
     {
-        if (!this.IsOwner) { return; }
+        if (!this.IsOwner || this._animationController.IsAttacking) { return; }
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
             this.EquipWeapon(WeaponName.Sword);

@@ -122,8 +122,11 @@ namespace StarterAssets
             }
         }
 
+        private PlayerAnimationController _animationController;
+
         private void Awake()
         {
+            this._animationController = GetComponent<PlayerAnimationController>();
             _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
             _hasAnimator = TryGetComponent(out _animator);
             _controller = GetComponent<CharacterController>();
@@ -212,6 +215,8 @@ namespace StarterAssets
 
         private void Move()
         {
+            if (this._animationController.IsAttacking) { return; }
+
             // set target speed based on move speed, sprint speed and if sprint is pressed
             float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
 
