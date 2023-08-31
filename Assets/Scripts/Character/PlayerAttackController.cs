@@ -14,7 +14,7 @@ public class PlayerAttackController : NetworkBehaviour
 
     private void Update()
     {
-        if (!this.IsOwner) { return; }
+        if (!this.IsOwner || this._animationController.IsAttacking || this._animationController.IsTakingDamage) { return; }
 
         if (Input.GetKeyDown(KeyCode.Mouse0))
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
@@ -24,8 +24,6 @@ public class PlayerAttackController : NetworkBehaviour
 
     public void HandleLightAttack(WeaponName weaponName)
     {
-        if (this._animationController.IsAttacking) { return; }
-
         WeaponSO weaponSO = ResourceSystem.GetWeapon(weaponName);
         if (weaponSO == null) { return; }
 
@@ -34,8 +32,6 @@ public class PlayerAttackController : NetworkBehaviour
 
     public void HandleHeavyAttack(WeaponName weaponName)
     {
-        if (this._animationController.IsAttacking) { return; }
-
         WeaponSO weaponSO = ResourceSystem.GetWeapon(weaponName);
         if (weaponSO == null) { return; }
 

@@ -41,7 +41,7 @@ public class PlayerWeaponManager : NetworkBehaviorAutoDisable<PlayerWeaponManage
 
     private void Update()
     {
-        if (!this.IsOwner || this._animationController.IsAttacking) { return; }
+        if (!this.IsOwner || this._animationController.IsAttacking || this._animationController.IsTakingDamage) { return; }
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
             this.EquipWeapon(WeaponName.Sword);

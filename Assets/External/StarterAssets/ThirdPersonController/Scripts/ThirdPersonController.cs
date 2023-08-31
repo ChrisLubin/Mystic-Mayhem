@@ -222,7 +222,7 @@ namespace StarterAssets
 
             // note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
             // if there is no input, set the target speed to 0
-            if (_input.move == Vector2.zero || this._animationController.IsAttacking) targetSpeed = 0.0f;
+            if (_input.move == Vector2.zero || this._animationController.IsAttacking || this._animationController.IsTakingDamage) targetSpeed = 0.0f;
 
             // a reference to the players current horizontal velocity
             float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
