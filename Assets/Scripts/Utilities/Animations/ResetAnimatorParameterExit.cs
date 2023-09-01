@@ -1,7 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 
-public class ResetAnimatorParameter : StateMachineBehaviour
+public class ResetAnimatorParameterExit : StateMachineBehaviour
 {
     [SerializeField] private string _targetParameter;
     [SerializeField] private ParameterType _type;
@@ -9,7 +9,7 @@ public class ResetAnimatorParameter : StateMachineBehaviour
     [SerializeField] private int _resetIntValue;
     [SerializeField] private bool _resetBoolValue;
 
-    public override void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
+    public override void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
         NetworkObject networkObject = animator.GetComponent<NetworkObject>();
         if (networkObject == null || !networkObject.IsOwner) { return; }
@@ -21,11 +21,4 @@ public class ResetAnimatorParameter : StateMachineBehaviour
         else if (this._type == ParameterType.Bool)
             animator.SetBool(this._targetParameter, this._resetBoolValue);
     }
-}
-
-public enum ParameterType
-{
-    Float,
-    Int,
-    Bool
 }

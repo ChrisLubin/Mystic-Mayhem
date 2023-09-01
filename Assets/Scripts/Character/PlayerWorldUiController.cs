@@ -28,11 +28,11 @@ public class PlayerWorldUiController : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+
         if (this.IsOwner)
-        {
             this._healthSlider.gameObject.SetActive(false);
-            return;
-        }
+        else
+            this._healthSlider.value = this._networkController.CurrentHealth.Value;
     }
 
     private void OnHealthChange(int _, int currentHealth)

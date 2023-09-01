@@ -1,6 +1,6 @@
 using System;
 
-public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthController>
+public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthController>, IDamageable
 {
     private PlayerNetworkController _networkController;
     private PlayerAnimationController _animationController;
@@ -21,7 +21,7 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
         OnLocalPlayerHealthChange?.Invoke(this._networkController.CurrentHealth.Value);
     }
 
-    public void TakeDamage(int damage)
+    public void TakeDamageLocal(int damage, bool isFromServer = false)
     {
         if (!this.IsOwner) { return; }
 
@@ -31,5 +31,12 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
         WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         if (weaponSO == null) { return; }
         this._animationController.PlayTakeDamageAnimation(weaponSO.TakeDamageFrontId);
+    }
+
+    public void TakeDamageServer(int damage)
+    {
+        if (this.IsOwner) { return; }
+
+        this._networkController.TakeDamageServerRpc(this.OwnerClientId, damage);
     }
 }

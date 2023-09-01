@@ -6,22 +6,27 @@ public class PlayerAnimationController : WithLogger<PlayerAnimationController>
 
     private const int _ATTACK_ANIMATION_COUNT = 2;
     private const int _TAKE_DAMAGE_ANIMATION_COUNT = 1;
+    private const string _CAN_DEAL_MELEE_DAMAGE_PARAMETER = "CanDealMeleeDamage";
     private const string _IS_ATTACKING_PARAMETER = "IsAttacking";
     private const string _ATTACK_ID_PARAMETER = "AttackId";
     private const string _IS_TAKING_DAMAGE_ID_PARAMETER = "IsTakingDamage";
     private const string _TAKE_DAMAGE_ID_PARAMETER = "TakeDamageId";
+    private int _canDealMeleeDamageHash;
     private int _isAttackingHash;
     private int _attackIdHash;
     private int _isTakingDamageHash;
     private int _takeDamageIdHash;
 
+    public bool CanDealMeleeDamage { get => this._animator.GetBool(this._canDealMeleeDamageHash); }
     public bool IsAttacking { get => this._animator.GetBool(this._isAttackingHash); }
     public bool IsTakingDamage { get => this._animator.GetBool(this._isTakingDamageHash); }
+    public int CurrentAttackId { get => this._animator.GetInteger(this._attackIdHash); }
 
     protected override void Awake()
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
+        this._canDealMeleeDamageHash = Animator.StringToHash(_CAN_DEAL_MELEE_DAMAGE_PARAMETER);
         this._isAttackingHash = Animator.StringToHash(_IS_ATTACKING_PARAMETER);
         this._attackIdHash = Animator.StringToHash(_ATTACK_ID_PARAMETER);
         this._isTakingDamageHash = Animator.StringToHash(_IS_TAKING_DAMAGE_ID_PARAMETER);
@@ -50,6 +55,18 @@ public class PlayerAnimationController : WithLogger<PlayerAnimationController>
 
         this._animator.SetBool(this._isTakingDamageHash, true);
         this._animator.SetInteger(this._takeDamageIdHash, takeDamageId);
+    }
+
+    // Called from animation events
+    private void EnableCanDealMeleeDamage()
+    {
+        this._animator.SetBool(this._canDealMeleeDamageHash, true);
+    }
+
+    // Called from animation events
+    private void DisableCanDealMeleeDamage()
+    {
+        this._animator.SetBool(this._canDealMeleeDamageHash, false);
     }
 }
 

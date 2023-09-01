@@ -14,6 +14,10 @@ public class WeaponSO : ScriptableObject
     // Make sure IDs increase sequentially, don't skip any
     [Header("Take Damage Animations (ID Corresponds with Animator Parameter)")]
     public int TakeDamageFrontId;
+
+    [Header("Damage Values")]
+    public int LightAttackDamage;
+    public int HeavyAttackDamage;
 }
 
 public enum WeaponName

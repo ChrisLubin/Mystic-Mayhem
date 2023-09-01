@@ -18,3 +18,5 @@ MonoBehaviour:
   LightAttackOneId: 1
   HeavyAttackOneId: 2
   TakeDamageFrontId: 1
+  LightAttackDamage: 5
+  HeavyAttackDamage: 9
