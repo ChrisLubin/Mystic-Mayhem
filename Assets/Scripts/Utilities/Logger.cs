@@ -31,6 +31,8 @@ public class Logger
         }
     }
 
+    public void Log(int message, LogLevel logLevel = LogLevel.Info) => this.Log(message.ToString(), logLevel);
+
     public enum LogLevel
     {
         Info = 0,
@@ -45,7 +47,7 @@ public abstract class WithLogger<T> : MonoBehaviour where T : MonoBehaviour
 
     protected virtual void Awake()
     {
-        this._logger = new Logger(this.name);
+        this._logger = new Logger(GetType().Name);
     }
 }
 
@@ -56,7 +58,7 @@ public abstract class StaticInstanceWithLogger<T> : StaticInstance<T> where T : 
     protected override void Awake()
     {
         base.Awake();
-        this._logger = new Logger(this.name);
+        this._logger = new Logger(GetType().Name);
     }
 }
 
@@ -66,7 +68,7 @@ public abstract class NetworkBehaviourWithLogger<T> : NetworkBehaviour where T :
 
     protected virtual void Awake()
     {
-        this._logger = new Logger(this.name);
+        this._logger = new Logger(GetType().Name);
     }
 }
 
@@ -77,6 +79,6 @@ public abstract class NetworkedStaticInstanceWithLogger<T> : NetworkedStaticInst
     protected override void Awake()
     {
         base.Awake();
-        this._logger = new Logger(this.name);
+        this._logger = new Logger(GetType().Name);
     }
 }

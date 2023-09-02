@@ -1,20 +1,22 @@
-using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerAttackController : NetworkBehaviour
+public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackController>
 {
     private PlayerAnimationController _animationController;
     private PlayerNetworkController _networkController;
+    private int _lastAttackId;
+    private int _lastAttackInputFrame; // Used so only 1 attack can be sent to animator per Update frame
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._networkController = GetComponent<PlayerNetworkController>();
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
-        if (!this.IsOwner || this._animationController.IsAttacking || this._animationController.IsTakingDamage) { return; }
+        if (!this.IsOwner || this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo)) { return; }
 
         if (Input.GetKeyDown(KeyCode.Mouse0))
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
@@ -27,7 +29,25 @@ public class PlayerAttackController : NetworkBehaviour
         WeaponSO weaponSO = ResourceSystem.GetWeapon(weaponName);
         if (weaponSO == null) { return; }
 
-        this._animationController.PlayAttackAnimation(weaponSO.LightAttackOneId);
+        int attackId = 0;
+
+        if (!this._animationController.CanCombo)
+            attackId = weaponSO.LightAttackOneId;
+        else if (this._lastAttackId == weaponSO.LightAttackOneId)
+            attackId = weaponSO.LightAttackTwoId;
+        else if (this._lastAttackId == weaponSO.LightAttackTwoId)
+            attackId = weaponSO.LightAttackThreeId;
+        else
+            return;
+
+        this._lastAttackInputFrame = Time.frameCount;
+        this._lastAttackId = attackId;
+        this._animationController.PlayAttackAnimation(attackId, true);
+
+        if (this._animationController.CanCombo)
+            this._logger.Log(attackId + " - Light Combo");
+        else
+            this._logger.Log(attackId);
     }
 
     public void HandleHeavyAttack(WeaponName weaponName)
@@ -35,6 +55,22 @@ public class PlayerAttackController : NetworkBehaviour
         WeaponSO weaponSO = ResourceSystem.GetWeapon(weaponName);
         if (weaponSO == null) { return; }
 
-        this._animationController.PlayAttackAnimation(weaponSO.HeavyAttackOneId);
+        int attackId = 0;
+
+        if (!this._animationController.CanCombo)
+            attackId = weaponSO.HeavyAttackOneId;
+        else if (this._lastAttackId == weaponSO.LightAttackTwoId)
+            attackId = weaponSO.HeavyAttackOneId;
+        else
+            return;
+
+        this._lastAttackInputFrame = Time.frameCount;
+        this._lastAttackId = attackId;
+        this._animationController.PlayAttackAnimation(attackId, false);
+
+        if (this._animationController.CanCombo)
+            this._logger.Log(attackId + " - Heavy Combo");
+        else
+            this._logger.Log(attackId);
     }
 }
