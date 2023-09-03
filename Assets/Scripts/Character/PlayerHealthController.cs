@@ -23,7 +23,7 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
 
     public void TakeDamageLocal(int damage, bool isFromServer = false)
     {
-        if (!this.IsOwner) { return; }
+        if (!this.IsOwner || this._animationController.IsParrying) { return; }
 
         this._networkController.CurrentHealth.Value = Math.Clamp(this._networkController.CurrentHealth.Value - damage, _PLAYER_MIN_HEALTH, PLAYER_MAX_HEALTH);
         OnLocalPlayerHealthChange?.Invoke(this._networkController.CurrentHealth.Value);

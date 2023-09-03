@@ -20,5 +20,7 @@ MonoBehaviour:
   LightAttackThreeId: 103
   HeavyAttackOneId: 104
   TakeDamageFrontId: 1
+  DoParryId: 51
+  GetParriedId: 52
   LightAttackDamage: 5
   HeavyAttackDamage: 9

@@ -4,6 +4,8 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 {
     private PlayerAnimationController _animationController;
     private PlayerNetworkController _networkController;
+    private PlayerParryController _parryController;
+
     private int _lastAttackId;
     private int _lastAttackInputFrame; // Used so only 1 attack can be sent to animator per Update frame
 
@@ -12,11 +14,14 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         base.Awake();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._networkController = GetComponent<PlayerNetworkController>();
+        this._parryController = GetComponent<PlayerParryController>();
     }
 
     private void FixedUpdate()
     {
         if (!this.IsOwner || this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo)) { return; }
+        if (!Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1)) { return; }
+        this._lastAttackInputFrame = Time.frameCount;
 
         if (Input.GetKeyDown(KeyCode.Mouse0))
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
@@ -40,7 +45,6 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         else
             return;
 
-        this._lastAttackInputFrame = Time.frameCount;
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, true);
 
@@ -52,6 +56,12 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 
     public void HandleHeavyAttack(WeaponName weaponName)
     {
+        if (!this._animationController.IsAttacking && !this._animationController.IsParrying && this._parryController.CanParry())
+        {
+            this._parryController.DoParry();
+            return;
+        }
+
         WeaponSO weaponSO = ResourceSystem.GetWeapon(weaponName);
         if (weaponSO == null) { return; }
 
@@ -64,7 +74,6 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         else
             return;
 
-        this._lastAttackInputFrame = Time.frameCount;
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, false);
 

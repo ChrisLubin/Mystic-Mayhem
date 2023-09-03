@@ -29,7 +29,8 @@ GameObject:
   - component: {fileID: 8951292671612671683}
   - component: {fileID: 5959580224227322091}
   - component: {fileID: 3749100078104314661}
-  m_Layer: 8
+  - component: {fileID: 6883965588894969065}
+  m_Layer: 7
   m_Name: Player
   m_TagString: Damagable
   m_Icon: {fileID: 0}
@@ -511,6 +512,19 @@ CapsuleCollider:
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &6883965588894969065
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373715124106623315}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf4c86daf685a5d41a039f8965d99657, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _maxParryDistance: 2.25
 --- !u!1 &1489742314011350481
 GameObject:
   m_ObjectHideFlags: 0
@@ -5871,6 +5885,16 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 8997610668926768130}
     m_Modifications:
+    - target: {fileID: 1318910781431847097, guid: da8b953a20356424ea393c550ed45ba4,
+        type: 3}
+      propertyPath: m_Size.y
+      value: 1.28
+      objectReference: {fileID: 0}
+    - target: {fileID: 1318910781431847097, guid: da8b953a20356424ea393c550ed45ba4,
+        type: 3}
+      propertyPath: m_Size.z
+      value: 0.46
+      objectReference: {fileID: 0}
     - target: {fileID: 4299937776886465220, guid: da8b953a20356424ea393c550ed45ba4,
         type: 3}
       propertyPath: m_RootOrder

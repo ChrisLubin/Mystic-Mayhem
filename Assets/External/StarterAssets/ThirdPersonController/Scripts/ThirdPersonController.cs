@@ -215,6 +215,9 @@ namespace StarterAssets
 
         private void Move()
         {
+            bool shouldLockPlayerMovement = this._animationController.IsAttacking || this._animationController.IsTakingDamage;
+            bool shouldLockPlayerRotation = this._animationController.IsAttacking && !this._animationController.CanCombo;
+
             // set target speed based on move speed, sprint speed and if sprint is pressed
             float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
 
@@ -222,7 +225,7 @@ namespace StarterAssets
 
             // note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
             // if there is no input, set the target speed to 0
-            if (_input.move == Vector2.zero || this._animationController.IsAttacking || this._animationController.IsTakingDamage) targetSpeed = 0.0f;
+            if (_input.move == Vector2.zero || shouldLockPlayerMovement) targetSpeed = 0.0f;
 
             // a reference to the players current horizontal velocity
             float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
@@ -259,6 +262,10 @@ namespace StarterAssets
             {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
                                   _mainCamera.transform.eulerAngles.y;
+
+                if (shouldLockPlayerRotation)
+                    _targetRotation = transform.eulerAngles.y;
+
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
                     RotationSmoothTime);
 

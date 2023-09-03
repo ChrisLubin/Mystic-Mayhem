@@ -5,9 +5,14 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
 {
     private Animator _animator;
 
+    // These IDs cannot overlap
     private HashSet<int> _validAttackIds = new() { 101, 102, 103, 104 };
     private HashSet<int> _validTakeDamageIds = new() { 1 };
+    private HashSet<int> _validDoParryIds = new() { 51, 52 };
 
+    private const string _IS_PARRYING_PARAMETER = "IsParrying";
+    private const string _CAN_BE_PARRIED_PARAMETER = "CanBeParried";
+    private const string _PARRY_ID_PARAMETER = "ParryId";
     private const string _CAN_COMBO_PARAMETER = "CanCombo";
     private const string _IS_CAN_COMBO_WINDOW_OVER_PARAMETER = "IsCanComboWindowOver";
     private const string _CAN_DEAL_MELEE_DAMAGE_PARAMETER = "CanDealMeleeDamage";
@@ -15,6 +20,9 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     private const string _ATTACK_ID_PARAMETER = "AttackId";
     private const string _IS_TAKING_DAMAGE_ID_PARAMETER = "IsTakingDamage";
     private const string _TAKE_DAMAGE_ID_PARAMETER = "TakeDamageId";
+    private int _isParryingHash;
+    private int _canBeParriedHash;
+    private int _parryIdHash;
     private int _canComboHash;
     private int _isCanComboWindowOverHash;
     private int _canDealMeleeDamageHash;
@@ -23,6 +31,8 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     private int _isTakingDamageHash;
     private int _takeDamageIdHash;
 
+    public bool IsParrying { get => this._animator.GetBool(this._isParryingHash); }
+    public bool CanBeParried { get => this._animator.GetBool(this._canBeParriedHash); }
     public bool CanCombo { get => this._animator.GetBool(this._canComboHash); }
     public bool CanDealMeleeDamage { get => this._animator.GetBool(this._canDealMeleeDamageHash); }
     public bool IsAttacking { get => this._animator.GetBool(this._isAttackingHash); }
@@ -33,6 +43,9 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
+        this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
+        this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
+        this._parryIdHash = Animator.StringToHash(_PARRY_ID_PARAMETER);
         this._canComboHash = Animator.StringToHash(_CAN_COMBO_PARAMETER);
         this._isCanComboWindowOverHash = Animator.StringToHash(_IS_CAN_COMBO_WINDOW_OVER_PARAMETER);
         this._canDealMeleeDamageHash = Animator.StringToHash(_CAN_DEAL_MELEE_DAMAGE_PARAMETER);
@@ -68,6 +81,20 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this.SetInteger(this._takeDamageIdHash, takeDamageId);
     }
 
+    public void PlayParryAnimation(int parryId, bool isBeingParried, bool enableRootMotion = false)
+    {
+        if (!this.IsOwner) { return; }
+        if (!this._validDoParryIds.TryGetValue(parryId, out _))
+        {
+            this._logger.Log("Parry not defined!", Logger.LogLevel.Warning);
+            return;
+        }
+
+        if (!isBeingParried)
+            this.SetBool(this._isParryingHash, true);
+        this.SetInteger(this._parryIdHash, parryId);
+    }
+
     private void SetBool(int hash, bool newValue, bool hasToBeOwner = true)
     {
         if (!this.IsOwner && hasToBeOwner) { return; }
@@ -93,4 +120,6 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this.SetBool(this._canComboHash, false);
         this.SetBool(this._isCanComboWindowOverHash, true);
     }
+    private void EnableCanBeParried() => this.SetBool(this._canBeParriedHash, true);
+    private void DisableCanBeParried() => this.SetBool(this._canBeParriedHash, false);
 }
