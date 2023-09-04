@@ -49,7 +49,7 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisa
         if (damageable == null) { return; }
 
         WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
-        int damage = this._animationController.CurrentAttackId == weaponSO.LightAttackOneId ? weaponSO.LightAttackDamage : weaponSO.HeavyAttackDamage;
+        int damage = this._animationController.CurrentAttackId == weaponSO.HeavyAttackOneId ? weaponSO.HeavyAttackDamage : weaponSO.LightAttackDamage;
         damageable.TakeDamageServer(damage);
     }
 }
