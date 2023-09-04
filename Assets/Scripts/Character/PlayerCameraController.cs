@@ -4,7 +4,7 @@ using System;
 
 public class PlayerCameraController : NetworkBehaviorAutoDisable<PlayerCameraController>
 {
-    [SerializeField] private CinemachineVirtualCamera _firstPersonCamera;
+    [SerializeField] private CinemachineVirtualCamera _thirdPersonCamera;
     [SerializeField] private CinemachineVirtualCamera _hoverBehindCamera;
 
     public event Action OnHoverCameraReached;
@@ -29,7 +29,7 @@ public class PlayerCameraController : NetworkBehaviorAutoDisable<PlayerCameraCon
     {
         if (blendedCamera.Name != this._hoverBehindCamera.Name) { return; }
 
-        this._firstPersonCamera.enabled = true;
+        this._thirdPersonCamera.enabled = true;
         this.OnHoverCameraReached?.Invoke();
     }
 }
