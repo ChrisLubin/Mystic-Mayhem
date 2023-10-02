@@ -18,41 +18,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._parryController = GetComponent<PlayerParryController>();
     }
 
-    public void SetAttackState(int lastAttackState) => this._lastAttackId = lastAttackState;
-
-    public struct AttackInput
-    {
-        public bool Sprint;
-        public Vector2 Move;
-
-        public AttackInput(bool sprint, Vector2 move)
-        {
-            this.Sprint = sprint;
-            this.Move = move;
-        }
-    }
-
-    public enum MouseClick
-    {
-        None,
-        Left,
-        Right
-    }
-
-    public MouseClick GetAttackInput()
-    {
-        MouseClick mouseClick;
-        if (Input.GetKeyDown(KeyCode.Mouse0))
-            mouseClick = MouseClick.Left;
-        else if (Input.GetKeyDown(KeyCode.Mouse1))
-            mouseClick = MouseClick.Right;
-        else
-            mouseClick = MouseClick.None;
-
-        return mouseClick;
-    }
-
-    public int OnTick(MouseClick mouseClick)
+    public int OnTick(AttackInput input)
     {
         if (!this.IsOwner)
         {
@@ -62,17 +28,32 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 
         if (this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo))
             return this._lastAttackId;
-        if (mouseClick == MouseClick.None)
+        if (input == AttackInput.None)
             return this._lastAttackId;
         this._lastAttackInputFrame = Time.frameCount;
 
-        if (mouseClick == MouseClick.Left)
+        if (input == AttackInput.LeftClick)
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
-        else if (mouseClick == MouseClick.Right)
+        else if (input == AttackInput.RightClick)
             this.HandleHeavyAttack(this._networkController.CurrentWeaponName.Value);
 
         return this._lastAttackId;
     }
+
+    public AttackInput GetAttackInput()
+    {
+        AttackInput input;
+        if (Input.GetKeyDown(KeyCode.Mouse0))
+            input = AttackInput.LeftClick;
+        else if (Input.GetKeyDown(KeyCode.Mouse1))
+            input = AttackInput.RightClick;
+        else
+            input = AttackInput.None;
+
+        return input;
+    }
+
+    public void SetAttackState(int lastAttackState) => this._lastAttackId = lastAttackState;
 
     public void HandleLightAttack(WeaponName weaponName)
     {
@@ -126,5 +107,12 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
             this._logger.Log(attackId + " - Heavy Combo");
         else
             this._logger.Log(attackId);
+    }
+
+    public enum AttackInput
+    {
+        None,
+        LeftClick,
+        RightClick
     }
 }

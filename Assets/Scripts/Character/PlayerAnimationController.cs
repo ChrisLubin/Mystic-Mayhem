@@ -57,38 +57,15 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this._takeDamageIdHash = Animator.StringToHash(_TAKE_DAMAGE_ID_PARAMETER);
     }
 
-    public struct AnimatorState
+    public AnimatorState OnTick()
     {
-        public int AA;
-        public int AnimationHash;
-        public float AnimationNormalizedTime;
-        public int ParryId;
-        public bool IsParrying;
-        public bool CanBeParried;
-        public bool CanCombo;
-        public bool IsCanComboWindowOver;
-        public bool CanDealMeleeDamage;
-        public bool IsAttacking;
-        public int AttackId;
-        public bool IsTakingDamage;
-        public int TakeDamageId;
+        this._animator.speed = 1f;
+        this._animator.Update(Time.deltaTime);
+        this._animator.speed = 0f;
 
-        public AnimatorState(int aa, int animationHash, float animationNormalizedTime, int parryId, bool isParrying, bool canBeParried, bool canCombo, bool isCanComboWindowOver, bool CanDealMeleeDamage, bool IsAttacking, int attackId, bool isTakingDamage, int takeDamageId)
-        {
-            this.AA = aa;
-            this.AnimationHash = animationHash;
-            this.AnimationNormalizedTime = animationNormalizedTime;
-            this.ParryId = parryId;
-            this.IsParrying = isParrying;
-            this.CanBeParried = canBeParried;
-            this.CanCombo = canCombo;
-            this.IsCanComboWindowOver = isCanComboWindowOver;
-            this.CanDealMeleeDamage = CanDealMeleeDamage;
-            this.IsAttacking = IsAttacking;
-            this.AttackId = attackId;
-            this.IsTakingDamage = isTakingDamage;
-            this.TakeDamageId = takeDamageId;
-        }
+        int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
+        AnimatorStateInfo clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
+        return new AnimatorState(clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash));
     }
 
     public void SetAnimatorState(AnimatorState state)
@@ -108,17 +85,6 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this.SetBool(this._isTakingDamageHash, state.IsTakingDamage, false);
         this.SetInteger(this._takeDamageIdHash, state.TakeDamageId, false);
         this._animator.speed = 0f;
-    }
-
-    public AnimatorState OnTick()
-    {
-        this._animator.speed = 1f;
-        this._animator.Update(Time.deltaTime);
-        this._animator.speed = 0f;
-
-        int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
-        AnimatorStateInfo clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
-        return new AnimatorState(Time.frameCount, clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash));
     }
 
     public void PlayAttackAnimation(int attackId, bool enableRootMotion = false)
@@ -191,4 +157,36 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     }
     private void EnableCanBeParried() => this.SetBool(this._canBeParriedHash, true);
     private void DisableCanBeParried() => this.SetBool(this._canBeParriedHash, false);
+
+    public struct AnimatorState
+    {
+        public int AnimationHash;
+        public float AnimationNormalizedTime;
+        public int ParryId;
+        public bool IsParrying;
+        public bool CanBeParried;
+        public bool CanCombo;
+        public bool IsCanComboWindowOver;
+        public bool CanDealMeleeDamage;
+        public bool IsAttacking;
+        public int AttackId;
+        public bool IsTakingDamage;
+        public int TakeDamageId;
+
+        public AnimatorState(int animationHash, float animationNormalizedTime, int parryId, bool isParrying, bool canBeParried, bool canCombo, bool isCanComboWindowOver, bool CanDealMeleeDamage, bool IsAttacking, int attackId, bool isTakingDamage, int takeDamageId)
+        {
+            this.AnimationHash = animationHash;
+            this.AnimationNormalizedTime = animationNormalizedTime;
+            this.ParryId = parryId;
+            this.IsParrying = isParrying;
+            this.CanBeParried = canBeParried;
+            this.CanCombo = canCombo;
+            this.IsCanComboWindowOver = isCanComboWindowOver;
+            this.CanDealMeleeDamage = CanDealMeleeDamage;
+            this.IsAttacking = IsAttacking;
+            this.AttackId = attackId;
+            this.IsTakingDamage = isTakingDamage;
+            this.TakeDamageId = takeDamageId;
+        }
+    }
 }

@@ -156,7 +156,16 @@ namespace StarterAssets
             _fallTimeoutDelta = FallTimeout;
         }
 
-        public (JumpAndGravityState, GroundedState, MoveState, CameraState) OnTick(bool jumpAndGravityInput, MoveInput moveInput, Vector3 moveVelocity, CameraInput cameraInput)
+        private void AssignAnimationIDs()
+        {
+            _animIDSpeed = Animator.StringToHash("Speed");
+            _animIDGrounded = Animator.StringToHash("Grounded");
+            _animIDJump = Animator.StringToHash("Jump");
+            _animIDFreeFall = Animator.StringToHash("FreeFall");
+            _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
+        }
+
+        public (JumpAndGravityState, GroundedState, MoveState, CameraState) OnTick(bool jumpAndGravityInput, MoveInput moveInput, Vector3 moveVelocity, Vector2 cameraInput)
         {
             JumpAndGravityState jumpAndGravityState = JumpAndGravity(jumpAndGravityInput);
             GroundedState groundedState = GroundedCheck();
@@ -169,34 +178,105 @@ namespace StarterAssets
         public bool GetJumpAndGravityInput() => _input.jump;
         public MoveInput GetMoveInput() => new(_input.sprint, _input.move);
         public Vector3 GetMoveVelocityInput() => _controller.velocity;
-        public CameraInput GetCameraInput() => new(_input.look);
+        public Vector2 GetCameraInput() => _input.look;
 
+        public void SetJumpAndGravityState(JumpAndGravityState state)
+        {
+            _verticalVelocity = state.VerticalVelocity;
+            _jumpTimeoutDelta = state.JumpTimeoutDelta;
+            _fallTimeoutDelta = state.FallTimeoutDelta;
+            _input.jump = state.Jump;
+        }
+        public void SetGroundedState(GroundedState state) => Grounded = state.Grounded;
+        public void SetMoveState(MoveState moveState)
+        {
+            _animationBlend = moveState.AnimationBlend;
+            _mainCamera.transform.eulerAngles = moveState.MainCameraEulerAngles;
+            transform.eulerAngles = moveState.TransformEurlerAngles;
+            _rotationVelocity = moveState.RotationVelocity;
+            _verticalVelocity = moveState.VerticalVelocty;
+            transform.position = moveState.TransformPosition;
+        }
         public void SetCameraState(CameraState state)
         {
             _cinemachineTargetYaw = state.CinemachineTargetYaw;
             _cinemachineTargetPitch = state.CinemachineTargetPitch;
         }
 
-        private void AssignAnimationIDs()
-        {
-            _animIDSpeed = Animator.StringToHash("Speed");
-            _animIDGrounded = Animator.StringToHash("Grounded");
-            _animIDJump = Animator.StringToHash("Jump");
-            _animIDFreeFall = Animator.StringToHash("FreeFall");
-            _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
-        }
+        // Use isSimulating ? payload.jump : _input.jump;
+        // input props - _input.jump, 
+        // state props - _verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump
 
-        public struct GroundedState
+        private JumpAndGravityState JumpAndGravity(bool jumpInput)
         {
-            public bool Grounded;
-
-            public GroundedState(bool grounded)
+            if (Grounded)
             {
-                this.Grounded = grounded;
-            }
-        }
+                // reset the fall timeout timer
+                _fallTimeoutDelta = FallTimeout;
 
-        public void SetGroundedState(GroundedState state) => Grounded = state.Grounded;
+                // update animator if using character
+                if (_hasAnimator)
+                {
+                    _animator.SetBool(_animIDJump, false);
+                    _animator.SetBool(_animIDFreeFall, false);
+                }
+
+                // stop our velocity dropping infinitely when grounded
+                if (_verticalVelocity < 0.0f)
+                {
+                    _verticalVelocity = -2f;
+                }
+
+                // Jump
+                if (jumpInput && _jumpTimeoutDelta <= 0.0f)
+                {
+                    // the square root of H * -2 * G = how much velocity needed to reach desired height
+                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+
+                    // update animator if using character
+                    if (_hasAnimator)
+                    {
+                        _animator.SetBool(_animIDJump, true);
+                    }
+                }
+
+                // jump timeout
+                if (_jumpTimeoutDelta >= 0.0f)
+                {
+                    _jumpTimeoutDelta -= Time.deltaTime;
+                }
+            }
+            else
+            {
+                // reset the jump timeout timer
+                _jumpTimeoutDelta = JumpTimeout;
+
+                // fall timeout
+                if (_fallTimeoutDelta >= 0.0f)
+                {
+                    _fallTimeoutDelta -= Time.deltaTime;
+                }
+                else
+                {
+                    // update animator if using character
+                    if (_hasAnimator)
+                    {
+                        _animator.SetBool(_animIDFreeFall, true);
+                    }
+                }
+
+                // if we are not grounded, do not jump
+                _input.jump = false;
+            }
+
+            // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
+            if (_verticalVelocity < _terminalVelocity)
+            {
+                _verticalVelocity += Gravity * Time.deltaTime;
+            }
+
+            return new(_verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump);
+        }
 
         // Set grounded on first tick of re-simulation window
         // input props - 
@@ -217,99 +297,6 @@ namespace StarterAssets
             }
 
             return new(Grounded);
-        }
-
-        public struct CameraInput
-        {
-            public Vector2 Look;
-
-            public CameraInput(Vector2 look)
-            {
-                this.Look = look;
-            }
-        }
-
-        public struct CameraState
-        {
-            public float CinemachineTargetYaw;
-            public float CinemachineTargetPitch;
-
-            public CameraState(float cinemachineTargetYaw, float cinemachineTargetPitch)
-            {
-                this.CinemachineTargetYaw = cinemachineTargetYaw;
-                this.CinemachineTargetPitch = cinemachineTargetPitch;
-            }
-        }
-
-        // Don't forget to do _input.look = Vector2.zero; after done simulating
-        // input props - _input.look, 
-        // state props - _cinemachineTargetYaw, _cinemachineTargetPitch,
-
-        private CameraState CameraRotation(CameraInput input)
-        {
-            // // if there is an input and camera position is not fixed
-            if (input.Look.sqrMagnitude >= _threshold && !LockCameraPosition)
-            {
-                //Don't multiply mouse input by Time.deltaTime;
-                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
-
-                _cinemachineTargetYaw += input.Look.x * deltaTimeMultiplier;
-                _cinemachineTargetPitch += input.Look.y * deltaTimeMultiplier;
-            }
-
-            // clamp our rotations so our values are limited 360 degrees
-            _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
-            _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
-
-            // Cinemachine will follow this target
-            CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch + CameraAngleOverride,
-                _cinemachineTargetYaw, 0.0f);
-
-            return new(_cinemachineTargetYaw, _cinemachineTargetPitch);
-        }
-
-        public struct MoveInput
-        {
-            public bool Sprint;
-            public Vector2 Move;
-
-            public MoveInput(bool sprint, Vector2 move)
-            {
-                this.Sprint = sprint;
-                this.Move = move;
-            }
-        }
-
-        public struct MoveState
-        {
-            public Vector3 Velocity;
-            public float AnimationBlend;
-            public Vector3 MainCameraEulerAngles;
-            public Vector3 TransformEurlerAngles;
-            public float RotationVelocity;
-            public float VerticalVelocty;
-            public Vector3 TransformPosition;
-
-            public MoveState(Vector3 velocty, float animationBlend, Vector3 mainCamEulerAngles, Vector3 transformEurlerAngles, float rotationVelocity, float verticalVelocity, Vector3 transformPosition)
-            {
-                this.Velocity = velocty;
-                this.AnimationBlend = animationBlend;
-                this.MainCameraEulerAngles = mainCamEulerAngles;
-                this.TransformEurlerAngles = transformEurlerAngles;
-                this.RotationVelocity = rotationVelocity;
-                this.VerticalVelocty = verticalVelocity;
-                this.TransformPosition = transformPosition;
-            }
-        }
-
-        public void SetMoveState(MoveState moveState)
-        {
-            _animationBlend = moveState.AnimationBlend;
-            _mainCamera.transform.eulerAngles = moveState.MainCameraEulerAngles;
-            transform.eulerAngles = moveState.TransformEurlerAngles;
-            _rotationVelocity = moveState.RotationVelocity;
-            _verticalVelocity = moveState.VerticalVelocty;
-            transform.position = moveState.TransformPosition;
         }
 
         // Set transform.position to previous tick's state for the first tick during simulation window.
@@ -395,103 +382,31 @@ namespace StarterAssets
             return new(_controller.velocity, _animationBlend, _mainCamera.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position);
         }
 
-        public struct JumpAndGravityState
+        // Don't forget to do _input.look = Vector2.zero; after done simulating
+        // input props - _input.look, 
+        // state props - _cinemachineTargetYaw, _cinemachineTargetPitch,
+
+        private CameraState CameraRotation(Vector2 lookInput)
         {
-            public float VerticalVelocity;
-            public float JumpTimeoutDelta;
-            public float FallTimeoutDelta;
-            public bool Jump;
-
-            public JumpAndGravityState(float verticalVelocity, float jumpTimeoutDelta, float fallTimeoutDelta, bool jump)
+            // // if there is an input and camera position is not fixed
+            if (lookInput.sqrMagnitude >= _threshold && !LockCameraPosition)
             {
-                this.VerticalVelocity = verticalVelocity;
-                this.JumpTimeoutDelta = jumpTimeoutDelta;
-                this.FallTimeoutDelta = fallTimeoutDelta;
-                this.Jump = jump;
-            }
-        }
+                //Don't multiply mouse input by Time.deltaTime;
+                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
 
-        public void SetJumpAndGravityState(JumpAndGravityState state)
-        {
-            _verticalVelocity = state.VerticalVelocity;
-            _jumpTimeoutDelta = state.JumpTimeoutDelta;
-            _fallTimeoutDelta = state.FallTimeoutDelta;
-            _input.jump = state.Jump;
-        }
-
-        // Use isSimulating ? payload.jump : _input.jump;
-        // input props - _input.jump, 
-        // state props - _verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump
-
-        private JumpAndGravityState JumpAndGravity(bool jumpInput)
-        {
-            if (Grounded)
-            {
-                // reset the fall timeout timer
-                _fallTimeoutDelta = FallTimeout;
-
-                // update animator if using character
-                if (_hasAnimator)
-                {
-                    _animator.SetBool(_animIDJump, false);
-                    _animator.SetBool(_animIDFreeFall, false);
-                }
-
-                // stop our velocity dropping infinitely when grounded
-                if (_verticalVelocity < 0.0f)
-                {
-                    _verticalVelocity = -2f;
-                }
-
-                // Jump
-                if (jumpInput && _jumpTimeoutDelta <= 0.0f)
-                {
-                    // the square root of H * -2 * G = how much velocity needed to reach desired height
-                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-
-                    // update animator if using character
-                    if (_hasAnimator)
-                    {
-                        _animator.SetBool(_animIDJump, true);
-                    }
-                }
-
-                // jump timeout
-                if (_jumpTimeoutDelta >= 0.0f)
-                {
-                    _jumpTimeoutDelta -= Time.deltaTime;
-                }
-            }
-            else
-            {
-                // reset the jump timeout timer
-                _jumpTimeoutDelta = JumpTimeout;
-
-                // fall timeout
-                if (_fallTimeoutDelta >= 0.0f)
-                {
-                    _fallTimeoutDelta -= Time.deltaTime;
-                }
-                else
-                {
-                    // update animator if using character
-                    if (_hasAnimator)
-                    {
-                        _animator.SetBool(_animIDFreeFall, true);
-                    }
-                }
-
-                // if we are not grounded, do not jump
-                _input.jump = false;
+                _cinemachineTargetYaw += lookInput.x * deltaTimeMultiplier;
+                _cinemachineTargetPitch += lookInput.y * deltaTimeMultiplier;
             }
 
-            // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
-            if (_verticalVelocity < _terminalVelocity)
-            {
-                _verticalVelocity += Gravity * Time.deltaTime;
-            }
+            // clamp our rotations so our values are limited 360 degrees
+            _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
+            _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
 
-            return new(_verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump);
+            // Cinemachine will follow this target
+            CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch + CameraAngleOverride,
+                _cinemachineTargetYaw, 0.0f);
+
+            return new(_cinemachineTargetYaw, _cinemachineTargetPitch);
         }
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
@@ -532,6 +447,78 @@ namespace StarterAssets
             if (animationEvent.animatorClipInfo.weight > 0.5f)
             {
                 AudioSource.PlayClipAtPoint(LandingAudioClip, transform.TransformPoint(_controller.center), FootstepAudioVolume);
+            }
+        }
+
+        public struct MoveInput
+        {
+            public bool Sprint;
+            public Vector2 Move;
+
+            public MoveInput(bool sprint, Vector2 move)
+            {
+                this.Sprint = sprint;
+                this.Move = move;
+            }
+        }
+
+        public struct JumpAndGravityState
+        {
+            public float VerticalVelocity;
+            public float JumpTimeoutDelta;
+            public float FallTimeoutDelta;
+            public bool Jump;
+
+            public JumpAndGravityState(float verticalVelocity, float jumpTimeoutDelta, float fallTimeoutDelta, bool jump)
+            {
+                this.VerticalVelocity = verticalVelocity;
+                this.JumpTimeoutDelta = jumpTimeoutDelta;
+                this.FallTimeoutDelta = fallTimeoutDelta;
+                this.Jump = jump;
+            }
+        }
+
+        public struct GroundedState
+        {
+            public bool Grounded;
+
+            public GroundedState(bool grounded)
+            {
+                this.Grounded = grounded;
+            }
+        }
+
+        public struct MoveState
+        {
+            public Vector3 Velocity;
+            public float AnimationBlend;
+            public Vector3 MainCameraEulerAngles;
+            public Vector3 TransformEurlerAngles;
+            public float RotationVelocity;
+            public float VerticalVelocty;
+            public Vector3 TransformPosition;
+
+            public MoveState(Vector3 velocty, float animationBlend, Vector3 mainCamEulerAngles, Vector3 transformEurlerAngles, float rotationVelocity, float verticalVelocity, Vector3 transformPosition)
+            {
+                this.Velocity = velocty;
+                this.AnimationBlend = animationBlend;
+                this.MainCameraEulerAngles = mainCamEulerAngles;
+                this.TransformEurlerAngles = transformEurlerAngles;
+                this.RotationVelocity = rotationVelocity;
+                this.VerticalVelocty = verticalVelocity;
+                this.TransformPosition = transformPosition;
+            }
+        }
+
+        public struct CameraState
+        {
+            public float CinemachineTargetYaw;
+            public float CinemachineTargetPitch;
+
+            public CameraState(float cinemachineTargetYaw, float cinemachineTargetPitch)
+            {
+                this.CinemachineTargetYaw = cinemachineTargetYaw;
+                this.CinemachineTargetPitch = cinemachineTargetPitch;
             }
         }
     }

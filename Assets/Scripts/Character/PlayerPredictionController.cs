@@ -43,12 +43,12 @@ public class PlayerPredictionController : NetworkBehaviour
             bool jumpAndGravityInput = this._movementController.GetJumpAndGravityInput();
             ThirdPersonController.MoveInput moveInput = this._movementController.GetMoveInput();
             Vector3 moveVelocityInput = this._movementController.GetMoveVelocityInput();
-            ThirdPersonController.CameraInput cameraInput = this._movementController.GetCameraInput();
+            Vector2 cameraInput = this._movementController.GetCameraInput();
             var movementStates = this._movementController.OnTick(jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput);
 
             PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
 
-            PlayerAttackController.MouseClick attackInput = this._attackController.GetAttackInput();
+            PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
             int attackState = this._attackController.OnTick(attackInput); // WILL HAVE TO REFACTOR LAST ATTACK INPUT FRAME WHEN IMPLEMENTING TICKETS BETWEEN FRAMES
 
             if (this._isRecording)
@@ -105,10 +105,10 @@ public class PlayerPredictionController : NetworkBehaviour
         public bool JumpAndGravityInput;
         public ThirdPersonController.MoveInput MoveInput;
         public Vector3 MoveVelocityInput;
-        public ThirdPersonController.CameraInput CameraInput;
-        public PlayerAttackController.MouseClick AttackInput;
+        public Vector2 CameraInput;
+        public PlayerAttackController.AttackInput AttackInput;
 
-        public TickInputs(int tick, bool jumpAndGravityInput, ThirdPersonController.MoveInput moveInput, Vector3 moveVelocityInput, ThirdPersonController.CameraInput cameraInput, PlayerAttackController.MouseClick attackInput)
+        public TickInputs(int tick, bool jumpAndGravityInput, ThirdPersonController.MoveInput moveInput, Vector3 moveVelocityInput, Vector2 cameraInput, PlayerAttackController.AttackInput attackInput)
         {
             this.Tick = tick;
             this.JumpAndGravityInput = jumpAndGravityInput;
