@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackController>
@@ -17,16 +18,108 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._parryController = GetComponent<PlayerParryController>();
     }
 
-    private void FixedUpdate()
+    public void SetAttackState()
     {
-        if (!this.IsOwner || this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo)) { return; }
-        if (!Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1)) { return; }
+        this._lastAttackId = this._attackStates[0];
+    }
+
+    public struct AttackPayload
+    {
+        public bool Sprint;
+        public Vector2 Move;
+
+        public AttackPayload(bool sprint, Vector2 move)
+        {
+            this.Sprint = sprint;
+            this.Move = move;
+        }
+    }
+
+    public enum MouseClick
+    {
+        None,
+        Left,
+        Right
+    }
+
+    private List<MouseClick> _attackPaylods = new();
+    private List<int> _attackStates = new();
+
+    public void OnUpdate(bool isRecording, bool isSimulating, bool doLog, int frameCount, int currentTick = 0)
+    {
+        if (!isSimulating)
+        {
+            MouseClick mouseClick;
+            if (Input.GetKeyDown(KeyCode.Mouse0))
+                mouseClick = MouseClick.Left;
+            else if (Input.GetKeyDown(KeyCode.Mouse1))
+                mouseClick = MouseClick.Right;
+            else
+                mouseClick = MouseClick.None;
+
+            if (doLog)
+                Debug.Log(frameCount);
+            this.Run(isRecording, mouseClick);
+            if (doLog)
+                this.LogState(mouseClick);
+        }
+        else
+        {
+            if (doLog)
+                Debug.Log(frameCount);
+            this.Run(isRecording, this._attackPaylods[currentTick]);
+            if (doLog)
+                this.LogState(this._attackPaylods[currentTick]);
+
+            if (currentTick == this._attackPaylods.Count - 1)
+            {
+                // Stop simulating
+                this._attackPaylods.Clear();
+                this._attackStates.Clear();
+                return;
+            }
+        }
+    }
+
+    private void LogState(MouseClick mouseClick)
+    {
+        if (mouseClick == MouseClick.Left)
+            Debug.Log("Left Click");
+        else if (mouseClick == MouseClick.Right)
+            Debug.Log("Right Click");
+        else
+            Debug.Log("NO Click");
+    }
+
+    private void Run(bool isRecording, MouseClick mouseClick)
+    {
+        if (!this.IsOwner) { return; }
+        if (isRecording)
+            this._attackPaylods.Add(mouseClick);
+        // else
+        //     Debug.Log(mouseClick);
+
+        if (this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo))
+        {
+            if (isRecording)
+                this._attackStates.Add(this._lastAttackId);
+            return;
+        }
+        if (mouseClick == MouseClick.None)
+        {
+            if (isRecording)
+                this._attackStates.Add(this._lastAttackId);
+            return;
+        }
         this._lastAttackInputFrame = Time.frameCount;
 
-        if (Input.GetKeyDown(KeyCode.Mouse0))
+        if (mouseClick == MouseClick.Left)
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
-        else if (Input.GetKeyDown(KeyCode.Mouse1))
+        else if (mouseClick == MouseClick.Right)
             this.HandleHeavyAttack(this._networkController.CurrentWeaponName.Value);
+
+        if (isRecording)
+            this._attackStates.Add(this._lastAttackId);
     }
 
     public void HandleLightAttack(WeaponName weaponName)
