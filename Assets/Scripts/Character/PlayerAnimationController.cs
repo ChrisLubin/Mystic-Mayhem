@@ -5,7 +5,6 @@ using UnityEngine;
 public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimationController>
 {
     private Animator _animator;
-    private PlayerAttackController _attackController;
 
     // These IDs cannot overlap
     private HashSet<int> _validAttackIds = new() { 101, 102, 103, 104 };
@@ -45,7 +44,6 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
-        this._attackController = GetComponent<PlayerAttackController>();
         this._animator.speed = 0f;
         this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
         this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
@@ -93,7 +91,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         }
     }
 
-    private void SetAnimatorState(AnimatorState state)
+    public void SetAnimatorState(AnimatorState state)
     {
         this._animator.speed = 1f;
         this._animator.Play(state.AnimationHash, -1, state.AnimationNormalizedTime);
@@ -112,76 +110,15 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this._animator.speed = 0f;
     }
 
-    private void LogState(int frameCount)
-    {
-        var layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
-        var clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
-        var ok = new AnimatorState(frameCount, clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash));
-        Debug.Log(JsonUtility.ToJson(ok, true));
-    }
-
-    private List<AnimatorState> _animatorStates = new();
-    private bool _isSimulating = false;
-    private bool _isRecording = false;
-    private int _currentTick = -1;
-
-    private void Update()
-    {
-        if (this._isSimulating)
-        {
-            bool isFirstTickInSimulationWindow = this._currentTick == -1;
-            if (isFirstTickInSimulationWindow)
-                this._currentTick = 1;
-
-            if (isFirstTickInSimulationWindow)
-            {
-                this.SetAnimatorState(this._animatorStates[0]);
-                this._attackController.SetAttackState();
-            }
-
-            this.Run(this._isRecording);
-
-            this._currentTick++;
-
-            if (this._currentTick == this._animatorStates.Count)
-            {
-                // Stop simulating
-                this._currentTick = -1;
-                this._isSimulating = false;
-                this._isRecording = false;
-                this._animatorStates.Clear();
-                return;
-            }
-        }
-        else
-            this.Run(this._isRecording);
-
-        // this._attackController.OnUpdate(this._isRecording, this._isSimulating, this._isRecording || this._isSimulating, this._isSimulating ? this._animatorStates[this._currentTick - 1].AA : Time.frameCount, this._currentTick);
-        this._attackController.OnUpdate(this._isRecording, this._isSimulating, false, this._isSimulating ? this._animatorStates[this._currentTick - 1].AA : Time.frameCount, this._currentTick);
-        // if (this._isRecording || this._isSimulating)
-        //     this.LogState(this._isSimulating ? this._animatorStates[this._currentTick - 1].AA : Time.frameCount);
-
-        if (Input.GetKeyDown(KeyCode.Q))
-            this._isRecording = true;
-        if (Input.GetKeyDown(KeyCode.T))
-        {
-            this._isSimulating = true;
-            this._isRecording = false;
-        }
-    }
-
-    private void Run(bool isRecording)
+    public AnimatorState OnTick()
     {
         this._animator.speed = 1f;
         this._animator.Update(Time.deltaTime);
         this._animator.speed = 0f;
 
-        if (isRecording)
-        {
-            var layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
-            var clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
-            this._animatorStates.Add(new AnimatorState(Time.frameCount, clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash)));
-        }
+        int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
+        AnimatorStateInfo clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
+        return new AnimatorState(Time.frameCount, clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash));
     }
 
     public void PlayAttackAnimation(int attackId, bool enableRootMotion = false)

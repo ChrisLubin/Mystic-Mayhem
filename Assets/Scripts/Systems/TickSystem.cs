@@ -1,6 +1,5 @@
 using System;
 using Unity.Netcode;
-using UnityEngine;
 
 public class TickSystem : NetworkBehaviour
 {
@@ -14,15 +13,18 @@ public class TickSystem : NetworkBehaviour
     {
         if (MultiplayerSystem.State != MultiplayerState.CreatedLobby && MultiplayerSystem.State != MultiplayerState.JoinedLobby) { return; }
 
-        _timer += Time.deltaTime;
+        OnTick?.Invoke(_currentTick);
+        _currentTick++;
 
-        while (_timer >= MIN_TIME_BETWEEN_TICKS)
-        {
-            _timer -= MIN_TIME_BETWEEN_TICKS;
-            // Do 2 waves, have TPC run in first wave then player animator in 2nd wave
-            // Or have predictionController on player and have that run the "OnTick" functions in the correct order
-            OnTick?.Invoke(_currentTick);
-            _currentTick++;
-        }
+        // _timer += Time.deltaTime;
+
+        // while (_timer >= MIN_TIME_BETWEEN_TICKS)
+        // {
+        //     _timer -= MIN_TIME_BETWEEN_TICKS;
+        //     // Do 2 waves, have TPC run in first wave then player animator in 2nd wave
+        //     // Or have predictionController on player and have that run the "OnTick" functions in the correct order
+        //     OnTick?.Invoke(_currentTick);
+        //     _currentTick++;
+        // }
     }
 }

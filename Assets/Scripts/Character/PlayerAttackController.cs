@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackController>
@@ -9,6 +8,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 
     private int _lastAttackId;
     private int _lastAttackInputFrame; // Used so only 1 attack can be sent to animator per Update frame
+    // WILL HAVE TO REFACTOR LAST ATTACK INPUT FRAME WHEN IMPLEMENTING TICKETS BETWEEN FRAMES
 
     protected override void Awake()
     {
@@ -18,17 +18,14 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._parryController = GetComponent<PlayerParryController>();
     }
 
-    public void SetAttackState()
-    {
-        this._lastAttackId = this._attackStates[0];
-    }
+    public void SetAttackState(int lastAttackState) => this._lastAttackId = lastAttackState;
 
-    public struct AttackPayload
+    public struct AttackInput
     {
         public bool Sprint;
         public Vector2 Move;
 
-        public AttackPayload(bool sprint, Vector2 move)
+        public AttackInput(bool sprint, Vector2 move)
         {
             this.Sprint = sprint;
             this.Move = move;
@@ -42,75 +39,31 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         Right
     }
 
-    private List<MouseClick> _attackPaylods = new();
-    private List<int> _attackStates = new();
-
-    public void OnUpdate(bool isRecording, bool isSimulating, bool doLog, int frameCount, int currentTick = 0)
+    public MouseClick GetAttackInput()
     {
-        if (!isSimulating)
-        {
-            MouseClick mouseClick;
-            if (Input.GetKeyDown(KeyCode.Mouse0))
-                mouseClick = MouseClick.Left;
-            else if (Input.GetKeyDown(KeyCode.Mouse1))
-                mouseClick = MouseClick.Right;
-            else
-                mouseClick = MouseClick.None;
-
-            if (doLog)
-                Debug.Log(frameCount);
-            this.Run(isRecording, mouseClick);
-            if (doLog)
-                this.LogState(mouseClick);
-        }
+        MouseClick mouseClick;
+        if (Input.GetKeyDown(KeyCode.Mouse0))
+            mouseClick = MouseClick.Left;
+        else if (Input.GetKeyDown(KeyCode.Mouse1))
+            mouseClick = MouseClick.Right;
         else
-        {
-            if (doLog)
-                Debug.Log(frameCount);
-            this.Run(isRecording, this._attackPaylods[currentTick]);
-            if (doLog)
-                this.LogState(this._attackPaylods[currentTick]);
+            mouseClick = MouseClick.None;
 
-            if (currentTick == this._attackPaylods.Count - 1)
-            {
-                // Stop simulating
-                this._attackPaylods.Clear();
-                this._attackStates.Clear();
-                return;
-            }
-        }
+        return mouseClick;
     }
 
-    private void LogState(MouseClick mouseClick)
+    public int OnTick(MouseClick mouseClick)
     {
-        if (mouseClick == MouseClick.Left)
-            Debug.Log("Left Click");
-        else if (mouseClick == MouseClick.Right)
-            Debug.Log("Right Click");
-        else
-            Debug.Log("NO Click");
-    }
-
-    private void Run(bool isRecording, MouseClick mouseClick)
-    {
-        if (!this.IsOwner) { return; }
-        if (isRecording)
-            this._attackPaylods.Add(mouseClick);
-        // else
-        //     Debug.Log(mouseClick);
+        if (!this.IsOwner)
+        {
+            Debug.Log("WAS NOT THE OWNER!!!!!!!");
+            return 0;
+        }
 
         if (this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo))
-        {
-            if (isRecording)
-                this._attackStates.Add(this._lastAttackId);
-            return;
-        }
+            return this._lastAttackId;
         if (mouseClick == MouseClick.None)
-        {
-            if (isRecording)
-                this._attackStates.Add(this._lastAttackId);
-            return;
-        }
+            return this._lastAttackId;
         this._lastAttackInputFrame = Time.frameCount;
 
         if (mouseClick == MouseClick.Left)
@@ -118,8 +71,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         else if (mouseClick == MouseClick.Right)
             this.HandleHeavyAttack(this._networkController.CurrentWeaponName.Value);
 
-        if (isRecording)
-            this._attackStates.Add(this._lastAttackId);
+        return this._lastAttackId;
     }
 
     public void HandleLightAttack(WeaponName weaponName)
