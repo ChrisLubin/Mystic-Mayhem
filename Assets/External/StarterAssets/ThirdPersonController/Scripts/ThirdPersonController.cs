@@ -125,9 +125,11 @@ namespace StarterAssets
         }
 
         private PlayerAnimationController _animationController;
+        private Vector3 _lastPosition;
 
         private void Awake()
         {
+            _lastPosition = transform.position;
             this._animationController = GetComponent<PlayerAnimationController>();
             _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
             _hasAnimator = TryGetComponent(out _animator);
@@ -196,6 +198,7 @@ namespace StarterAssets
             _rotationVelocity = moveState.RotationVelocity;
             _verticalVelocity = moveState.VerticalVelocty;
             transform.position = moveState.TransformPosition;
+            this._lastPosition = moveState.LastPosition;
         }
         public void SetCameraState(CameraState state)
         {
@@ -243,7 +246,7 @@ namespace StarterAssets
                 // jump timeout
                 if (_jumpTimeoutDelta >= 0.0f)
                 {
-                    _jumpTimeoutDelta -= Time.deltaTime;
+                    _jumpTimeoutDelta -= TickSystem.MIN_TIME_BETWEEN_TICKS;
                 }
             }
             else
@@ -254,7 +257,7 @@ namespace StarterAssets
                 // fall timeout
                 if (_fallTimeoutDelta >= 0.0f)
                 {
-                    _fallTimeoutDelta -= Time.deltaTime;
+                    _fallTimeoutDelta -= TickSystem.MIN_TIME_BETWEEN_TICKS;
                 }
                 else
                 {
@@ -272,7 +275,7 @@ namespace StarterAssets
             // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
             if (_verticalVelocity < _terminalVelocity)
             {
-                _verticalVelocity += Gravity * Time.deltaTime;
+                _verticalVelocity += Gravity * TickSystem.MIN_TIME_BETWEEN_TICKS;
             }
 
             return new(_verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump);
@@ -305,8 +308,9 @@ namespace StarterAssets
         // input props - _input.sprint, _input.move (2 value are either -1f, 0f, or 1f), 
         // state props - IsAttacking, IsTakingDamage, CanCombo, _controller.velocity (only use x & y even tho it's Vector3), _animationBlend, _mainCamera.transform.eulerAngles.y, transform.eulerAngles.y, _rotationVelocity, _verticalVelocity
 
-        private MoveState Move(MoveInput moveInput, Vector3 velocity)
+        private MoveState Move(MoveInput moveInput, Vector3 _)
         {
+            Vector3 velocity = (transform.position - this._lastPosition) * TickSystem.MIN_TIME_BETWEEN_TICKS;
             // Uncomment when done with tests
             bool shouldLockPlayerMovement = this._animationController.IsAttacking || this._animationController.IsTakingDamage;
             bool shouldLockPlayerRotation = this._animationController.IsAttacking && !this._animationController.CanCombo;
@@ -333,7 +337,7 @@ namespace StarterAssets
                 // creates curved result rather than a linear one giving a more organic speed change
                 // note T in Lerp is clamped, so we don't need to clamp our speed
                 _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude,
-                    Time.deltaTime * SpeedChangeRate);
+                    TickSystem.MIN_TIME_BETWEEN_TICKS * SpeedChangeRate);
 
                 // round speed to 3 decimal places
                 _speed = Mathf.Round(_speed * 1000f) / 1000f;
@@ -343,7 +347,7 @@ namespace StarterAssets
                 _speed = targetSpeed;
             }
 
-            _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
+            _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, TickSystem.MIN_TIME_BETWEEN_TICKS * SpeedChangeRate);
             if (_animationBlend < 0.01f) _animationBlend = 0f;
 
             // normalise input direction
@@ -369,8 +373,8 @@ namespace StarterAssets
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
 
             // move the player
-            _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) +
-                             new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+            _controller.Move(targetDirection.normalized * (_speed * TickSystem.MIN_TIME_BETWEEN_TICKS) +
+                             new Vector3(0.0f, _verticalVelocity, 0.0f) * TickSystem.MIN_TIME_BETWEEN_TICKS);
 
             // update animator if using character
             if (_hasAnimator)
@@ -379,7 +383,7 @@ namespace StarterAssets
                 _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
             }
 
-            return new(_controller.velocity, _animationBlend, _mainCamera.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position);
+            return new(_controller.velocity, _animationBlend, _mainCamera.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position, this._lastPosition);
         }
 
         // Don't forget to do _input.look = Vector2.zero; after done simulating
@@ -392,7 +396,7 @@ namespace StarterAssets
             if (lookInput.sqrMagnitude >= _threshold && !LockCameraPosition)
             {
                 //Don't multiply mouse input by Time.deltaTime;
-                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
+                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : TickSystem.MIN_TIME_BETWEEN_TICKS;
 
                 _cinemachineTargetYaw += lookInput.x * deltaTimeMultiplier;
                 _cinemachineTargetPitch += lookInput.y * deltaTimeMultiplier;
@@ -497,8 +501,9 @@ namespace StarterAssets
             public float RotationVelocity;
             public float VerticalVelocty;
             public Vector3 TransformPosition;
+            public Vector3 LastPosition;
 
-            public MoveState(Vector3 velocty, float animationBlend, Vector3 mainCamEulerAngles, Vector3 transformEurlerAngles, float rotationVelocity, float verticalVelocity, Vector3 transformPosition)
+            public MoveState(Vector3 velocty, float animationBlend, Vector3 mainCamEulerAngles, Vector3 transformEurlerAngles, float rotationVelocity, float verticalVelocity, Vector3 transformPosition, Vector3 lastPosition)
             {
                 this.Velocity = velocty;
                 this.AnimationBlend = animationBlend;
@@ -507,6 +512,7 @@ namespace StarterAssets
                 this.RotationVelocity = rotationVelocity;
                 this.VerticalVelocty = verticalVelocity;
                 this.TransformPosition = transformPosition;
+                this.LastPosition = lastPosition;
             }
         }
 

@@ -45,6 +45,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         base.Awake();
         this._animator = GetComponent<Animator>();
         this._animator.speed = 0f;
+        this._animator.updateMode = AnimatorUpdateMode.AnimatePhysics;
         this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
         this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
         this._parryIdHash = Animator.StringToHash(_PARRY_ID_PARAMETER);
@@ -60,7 +61,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     public AnimatorState OnTick()
     {
         this._animator.speed = 1f;
-        this._animator.Update(Time.deltaTime);
+        this._animator.Update(TickSystem.MIN_TIME_BETWEEN_TICKS);
         this._animator.speed = 0f;
 
         int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
