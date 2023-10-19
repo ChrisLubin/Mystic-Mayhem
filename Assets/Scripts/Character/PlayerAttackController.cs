@@ -7,8 +7,6 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
     private PlayerParryController _parryController;
 
     private int _lastAttackId;
-    private int _lastAttackInputFrame; // Used so only 1 attack can be sent to animator per Update frame
-    // WILL HAVE TO REFACTOR LAST ATTACK INPUT FRAME WHEN IMPLEMENTING TICKETS BETWEEN FRAMES
 
     protected override void Awake()
     {
@@ -26,11 +24,10 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
             return 0;
         }
 
-        if (this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo))
+        if (this._animationController.IsTakingDamage || (this._animationController.IsAttacking && !this._animationController.CanCombo))
             return this._lastAttackId;
         if (input == AttackInput.None)
             return this._lastAttackId;
-        this._lastAttackInputFrame = Time.frameCount;
 
         if (input == AttackInput.LeftClick)
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);

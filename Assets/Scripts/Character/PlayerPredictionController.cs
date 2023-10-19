@@ -13,6 +13,7 @@ public class PlayerPredictionController : NetworkBehaviour
     private List<TickStates> _states = new();
 
     // Testing
+    private bool _isTesting = true;
     private bool _isRecording = false;
     private bool _isSimulating = false;
     private int _currentSimulatedTick = -1;
@@ -38,6 +39,12 @@ public class PlayerPredictionController : NetworkBehaviour
 
     private void OnTick(int currentTick)
     {
+        if (this._isTesting)
+            this.DoTestingLogic(currentTick);
+    }
+
+    private void DoTestingLogic(int currentTick)
+    {
         if (!this._isSimulating)
         {
             bool jumpAndGravityInput = this._movementController.GetJumpAndGravityInput();
@@ -49,7 +56,7 @@ public class PlayerPredictionController : NetworkBehaviour
             PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
 
             PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
-            int attackState = this._attackController.OnTick(attackInput); // WILL HAVE TO REFACTOR LAST ATTACK INPUT FRAME WHEN IMPLEMENTING TICKETS BETWEEN FRAMES
+            int attackState = this._attackController.OnTick(attackInput);
 
             if (this._isRecording)
             {
