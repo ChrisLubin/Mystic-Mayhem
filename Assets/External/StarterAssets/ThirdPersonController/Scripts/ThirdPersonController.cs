@@ -327,7 +327,7 @@ namespace StarterAssets
             // a reference to the players current horizontal velocity
             float currentHorizontalSpeed = new Vector3(velocity.x, 0.0f, velocity.z).magnitude;
 
-            float speedOffset = 0.1f;
+            float speedOffset = 0.5f;
             float inputMagnitude = _input.analogMovement ? moveInput.Move.magnitude : 1f;
 
             // accelerate or decelerate to target speed
