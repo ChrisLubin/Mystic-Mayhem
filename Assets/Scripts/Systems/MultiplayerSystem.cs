@@ -90,6 +90,9 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
 
     private async void Update()
     {
+        if ((MultiplayerSystem.State == MultiplayerState.CreatedLobby || MultiplayerSystem.State == MultiplayerState.JoinedLobby) && Input.GetKey(KeyCode.Escape) && Input.GetKey(KeyCode.F1))
+            this.ChangeState(MultiplayerState.LeavingLobby);
+
         if (!MultiplayerSystem.IsMultiplayer || !this.IsHost || this._lobby == null || MultiplayerSystem.State != MultiplayerState.CreatedLobby) { return; }
         this._timeSinceLastLobbyHeartbeat += Time.deltaTime;
 
@@ -256,6 +259,16 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                 break;
             case MultiplayerState.JoinedLobby:
                 MultiplayerSystem.IsMultiplayer = true;
+                break;
+            case MultiplayerState.LeavingLobby:
+                await this.DisposeLobby();
+                NetworkManager.Singleton.Shutdown();
+
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+#endif
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(newState), newState, null);
@@ -433,6 +446,7 @@ public enum MultiplayerState
     CreatedLobby,
     JoiningLobby,
     JoinedLobby,
+    LeavingLobby,
 }
 
 [Serializable]
