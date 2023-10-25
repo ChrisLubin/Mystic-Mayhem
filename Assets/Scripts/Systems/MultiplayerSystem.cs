@@ -23,6 +23,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
     public static event Action OnHostDisconnect;
     public static event Action OnError;
     public static bool IsMultiplayer { get; private set; } = false;
+    public static bool IsGameHost { get; private set; } = false;
     public static MultiplayerState State { get; private set; }
     private const int _MAX_PLAYER_COUNT = 7;
     public static string LocalPlayerName { get; private set; }
@@ -171,6 +172,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                     this._lobbyEventCallbacks.PlayerLeft += this.OnPlayerLeftLobby;
                     await LobbyService.Instance.SubscribeToLobbyEventsAsync(this._lobby.Id, this._lobbyEventCallbacks);
                     this._logger.Log($"Subscribed to lobby events");
+                    MultiplayerSystem.IsGameHost = true;
                     this.ChangeState(MultiplayerState.CreatedLobby);
                 }
                 catch (LobbyServiceException e)
@@ -230,6 +232,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                     this._lobbyEventCallbacks.PlayerLeft += this.OnPlayerLeftLobby;
                     await LobbyService.Instance.SubscribeToLobbyEventsAsync(this._lobby.Id, this._lobbyEventCallbacks);
                     this._logger.Log($"Subscribed to lobby events");
+                    MultiplayerSystem.IsGameHost = false;
                     this.ChangeState(MultiplayerState.JoinedLobby);
                 }
                 catch (LobbyServiceException e)

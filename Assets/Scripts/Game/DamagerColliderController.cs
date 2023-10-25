@@ -14,7 +14,13 @@ public class DamagerColliderController : MonoBehaviour
         this._collider = GetComponent<Collider>();
     }
 
-    private void OnTriggerEnter(Collider other) => this.OnCollide?.Invoke(other);
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.GetType().ToString() == "UnityEngine.CharacterController") { return; } // Hacky workaround for avoiding doing damage twice
+
+        this.OnCollide?.Invoke(other);
+    }
+
     public void SetEnabled(bool isEnabled) => this._collider.enabled = isEnabled;
     public Collider GetCollider() => this._collider;
 }

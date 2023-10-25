@@ -39,6 +39,7 @@ public class PlayerPredictionController : NetworkBehaviour
 
     private void OnTick(int currentTick)
     {
+        if (!this.IsOwner) { return; } // REMOVE LATER
         if (this._isTesting)
             this.DoTestingLogic(currentTick);
     }

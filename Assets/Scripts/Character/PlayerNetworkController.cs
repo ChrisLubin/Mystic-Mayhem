@@ -15,24 +15,7 @@ public class PlayerNetworkController : NetworkBehaviour
 
     [HideInInspector]
     public NetworkVariable<WeaponName> CurrentWeaponName = new(WeaponName.None, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
-    public NetworkVariable<int> CurrentHealth = new(PlayerHealthController.PLAYER_MAX_HEALTH, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
-
-    [ServerRpc(RequireOwnership = false)]
-    public void TakeDamageServerRpc(ulong targetPlayerClientId, int damage)
-    {
-        ulong[] allClientIds = Helpers.ToArray(NetworkManager.Singleton.ConnectedClientsIds);
-
-        // Send only to player taking damage
-        ClientRpcParams rpcParams = new()
-        {
-            Send = new ClientRpcSendParams { TargetClientIds = allClientIds.Where((ulong clientId) => clientId == targetPlayerClientId).ToArray() }
-        };
-
-        this.TakeDamageClientRpc(damage, rpcParams);
-    }
-
-    [ClientRpc]
-    public void TakeDamageClientRpc(int damage, ClientRpcParams _) => this._healthController.TakeDamageLocal(damage, true);
+    public NetworkVariable<int> CurrentHealth = new(PlayerHealthController.PLAYER_MAX_HEALTH, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     [ServerRpc(RequireOwnership = false)]
     public void GetParriedServerRpc(ulong targetPlayerClientId)

@@ -1,6 +1,7 @@
+using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisable<PlayerMeleeWeaponDamageColliderController>
+public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
 {
     private PlayerAnimationController _animationController;
     private PlayerNetworkController _networkController;
@@ -15,9 +16,11 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisa
         this._playerColliders = GetComponents<Collider>();
     }
 
-    protected override void OnOwnerNetworkSpawn()
+    public override void OnNetworkSpawn()
     {
-        this._weapon.OnCollide += this.OnWeaponTriggerEnter;
+        base.OnNetworkSpawn();
+        if (this.IsHost)
+            this._weapon.OnCollide += this.OnWeaponTriggerEnter;
 
         foreach (Collider collider in this._playerColliders)
         {
@@ -28,14 +31,13 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisa
     public override void OnDestroy()
     {
         base.OnDestroy();
-
-        if (this.IsOwner)
+        if (this.IsHost)
             this._weapon.OnCollide -= this.OnWeaponTriggerEnter;
     }
 
-    private void FixedUpdate()
+    private void FixedUpdate() // Maybe change to be checked on each tick to be more deterministic
     {
-        if (!this.IsOwner) { return; }
+        if (!this.IsHost) { return; }
 
         if (this._animationController.CanDealMeleeDamage == this._weapon.IsEnabled) { return; }
 

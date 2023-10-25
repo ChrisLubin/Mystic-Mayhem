@@ -8,11 +8,14 @@ public class DamagePlayerEnvironmentalItemController : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        if (other.GetType().ToString() == "UnityEngine.CharacterController") { return; } // Hacky workaround for avoiding doing damage twice
         if (other.tag != Constants.TagNames.Damagable) { return; }
-        other.TryGetComponent<NetworkObject>(out NetworkObject networkObject);
-        if (networkObject == null || !networkObject.IsOwner) { return; }
         other.TryGetComponent<IDamageable>(out IDamageable damageable);
         if (damageable == null) { return; }
-        damageable.TakeDamageLocal(this._damage);
+
+        if (MultiplayerSystem.IsGameHost)
+            damageable.TakeDamageServer(this._damage);
+        else
+            damageable.TakeDamageLocal(this._damage);
     }
 }

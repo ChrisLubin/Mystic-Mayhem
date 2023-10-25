@@ -44,8 +44,12 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
-        this._animator.speed = 0f;
-        this._animator.updateMode = AnimatorUpdateMode.AnimatePhysics;
+        if (this.IsOwner)
+        {
+            // REMOVE LATER
+            this._animator.speed = 0f;
+            this._animator.updateMode = AnimatorUpdateMode.AnimatePhysics;
+        }
         this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
         this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
         this._parryIdHash = Animator.StringToHash(_PARRY_ID_PARAMETER);

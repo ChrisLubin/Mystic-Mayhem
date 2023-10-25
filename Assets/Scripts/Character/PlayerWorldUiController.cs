@@ -11,13 +11,13 @@ public class PlayerWorldUiController : NetworkBehaviour
     private void Awake()
     {
         this._networkController = GetComponent<PlayerNetworkController>();
-        this._networkController.CurrentHealth.OnValueChanged += OnHealthChange;
+        this._networkController.CurrentHealth.OnValueChanged += this.OnHealthChange;
     }
 
     public override void OnDestroy()
     {
         base.OnDestroy();
-        this._networkController.CurrentHealth.OnValueChanged -= OnHealthChange;
+        this._networkController.CurrentHealth.OnValueChanged -= this.OnHealthChange;
     }
 
     private void Start()
