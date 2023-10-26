@@ -1,4 +1,3 @@
-using Unity.Netcode;
 using UnityEngine;
 
 public class ResetAnimatorParameterExit : StateMachineBehaviour
@@ -14,9 +13,6 @@ public class ResetAnimatorParameterExit : StateMachineBehaviour
 
     public override void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     {
-        NetworkObject networkObject = animator.GetComponent<NetworkObject>();
-        if (networkObject == null || !networkObject.IsOwner) { return; }
-
         if (this._type == ParameterType.Float)
             animator.SetFloat(this._targetParameterHash, this._resetFloatValue);
         else if (this._type == ParameterType.Int)

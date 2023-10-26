@@ -1,9 +1,10 @@
+using System;
 using System.Collections.Generic;
 using StarterAssets;
 using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerPredictionController : NetworkBehaviour
+public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredictionController>
 {
     private ThirdPersonController _movementController;
     private PlayerAnimationController _animationController;
@@ -13,16 +14,42 @@ public class PlayerPredictionController : NetworkBehaviour
     private List<TickStates> _states = new();
 
     // Testing
-    private bool _isTesting = true;
+    private bool _isTesting = false;
     private bool _isRecording = false;
     private bool _isSimulating = false;
     private int _currentSimulatedTick = -1;
 
-    private void Awake()
+    // Shared
+    private const int _BUFFER_SIZE = 1024; // ~17 seconds
+    private const float _MAX_POSITION_THRESHOLD = 0.03f;
+    private const float _MAX_ROTATION_THRESHOLD = 25f;
+
+    // Client
+    private TickInputs[] _clientInputBuffer;
+    private TickStates[] _clientStateBuffer;
+    private TickStates _clientLatestServerState;
+    private TickStates _clientLastProcessedState;
+    [SerializeField] private Transform _client;
+
+    // Server
+    private Queue<TickInputs> _serverInputQueue;
+    private TickStates[] _serverStateBuffer;
+    [SerializeField] private Transform _server;
+
+    protected override void Awake()
     {
+        base.Awake();
         this._movementController = GetComponent<ThirdPersonController>();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._attackController = GetComponent<PlayerAttackController>();
+    }
+
+    private void Start()
+    {
+        this._clientInputBuffer = new TickInputs[_BUFFER_SIZE];
+        this._clientStateBuffer = new TickStates[_BUFFER_SIZE];
+        this._serverInputQueue = new Queue<TickInputs>(_BUFFER_SIZE);
+        this._serverStateBuffer = new TickStates[_BUFFER_SIZE];
     }
 
     public override void OnNetworkSpawn()
@@ -37,13 +64,132 @@ public class PlayerPredictionController : NetworkBehaviour
         TickSystem.OnTick -= this.OnTick;
     }
 
-    private void OnTick(int currentTick)
+    private void Update()
     {
-        if (!this.IsOwner) { return; } // REMOVE LATER
-        if (this._isTesting)
-            this.DoTestingLogic(currentTick);
+        this._client.transform.position = this._clientLastProcessedState.MoveState.TransformPosition;
+        this._client.transform.eulerAngles = this._clientLastProcessedState.MoveState.TransformEurlerAngles;
+        this._server.transform.position = this._clientLatestServerState.MoveState.TransformPosition;
+        this._server.transform.eulerAngles = this._clientLatestServerState.MoveState.TransformEurlerAngles;
     }
 
+    private void OnTick(int currentTick)
+    {
+        if (this._isTesting)
+            this.DoTestingLogic(currentTick);
+        else
+            this.DoRealLogic(currentTick);
+    }
+
+    private bool ShouldReconcile()
+    {
+        if (this.IsHost) { return false; }
+
+        int latestServerStateBufferIndex = this._clientLatestServerState.Tick % _BUFFER_SIZE;
+        TickStates clientTickStatesForLatestServerStates = this._clientStateBuffer[latestServerStateBufferIndex];
+        float positionDistance = Vector3.Distance(this._clientLatestServerState.MoveState.TransformPosition, clientTickStatesForLatestServerStates.MoveState.TransformPosition);
+        float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, this._clientLatestServerState.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForLatestServerStates.MoveState.TransformEurlerAngles.y, 0f));
+
+        if (positionDistance > _MAX_POSITION_THRESHOLD)
+        {
+            Debug.Log($"Player {this.OwnerClientId} reconciled due to POS on tick {this._clientLatestServerState.Tick}");
+            return true;
+        }
+        else if (rotationDistance > _MAX_ROTATION_THRESHOLD)
+        {
+            Debug.Log($"Player {this.OwnerClientId} reconciled due to ROTATION on tick {this._clientLatestServerState.Tick}");
+            return true;
+        }
+
+        return false;
+    }
+
+    private void DoRealLogic(int currentTick)
+    {
+        if (this.IsOwner)
+        {
+            if (this.ShouldReconcile())
+            {
+                int latestServerStateBufferIndex = this._clientLatestServerState.Tick % _BUFFER_SIZE;
+
+                this._movementController.SetJumpAndGravityState(this._clientLatestServerState.JumpAndGravityState);
+                this._movementController.SetGroundedState(this._clientLatestServerState.GroundedState);
+                this._movementController.SetMoveState(this._clientLatestServerState.MoveState);
+                this._movementController.SetCameraState(this._clientLatestServerState.CameraState);
+                this._animationController.SetAnimatorState(this._clientLatestServerState.AnimatorState);
+                this._attackController.SetAttackState(this._clientLatestServerState.AttackState);
+
+                this._clientStateBuffer[latestServerStateBufferIndex] = this._clientLatestServerState;
+
+                int tickToProcess = this._clientLatestServerState.Tick + 1;
+
+                while (tickToProcess < currentTick)
+                {
+                    int tickToProcessBufferIndex = tickToProcess % _BUFFER_SIZE;
+                    TickInputs tickToProcessInputs = this._clientInputBuffer[tickToProcessBufferIndex];
+
+                    var tickToProcessMovementStates = this._movementController.OnTick(tickToProcessInputs.JumpAndGravityInput, tickToProcessInputs.MoveInput, tickToProcessInputs.MoveVelocityInput, tickToProcessInputs.CameraInput);
+                    PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
+                    int tickToProcessAttackState = this._attackController.OnTick(tickToProcessInputs.AttackInput);
+                    TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState);
+
+                    this._clientStateBuffer[tickToProcessBufferIndex] = tickToProcessTickStates;
+
+                    tickToProcess++;
+                }
+            }
+
+            int bufferIndex = currentTick % _BUFFER_SIZE;
+
+            bool jumpAndGravityInput = this._movementController.GetJumpAndGravityInput();
+            ThirdPersonController.MoveInput moveInput = this._movementController.GetMoveInput();
+            Vector3 moveVelocityInput = this._movementController.GetMoveVelocityInput();
+            Vector2 cameraInput = this._movementController.GetCameraInput();
+            var movementStates = this._movementController.OnTick(jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput);
+
+            PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
+
+            PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
+            int attackState = this._attackController.OnTick(attackInput);
+
+            TickInputs tickInputs = new(currentTick, jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput, attackInput);
+            TickStates tickStates = new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
+            this._clientInputBuffer[bufferIndex] = tickInputs;
+            this._clientStateBuffer[bufferIndex] = tickStates;
+            this._clientLastProcessedState = tickStates;
+            this.SendInputToServerRpc(tickInputs);
+
+            if (this.IsHost)
+                this.SendStateToClientRpc(tickStates);
+        }
+        else if (!this.IsOwner && this.IsHost)
+        {
+            int bufferIndex = -1;
+
+            while (this._serverInputQueue.Count > 0)
+            {
+                TickInputs tickInputs = this._serverInputQueue.Dequeue();
+                bufferIndex = tickInputs.Tick % _BUFFER_SIZE;
+
+                var movementStates = this._movementController.OnTick(tickInputs.JumpAndGravityInput, tickInputs.MoveInput, tickInputs.MoveVelocityInput, tickInputs.CameraInput);
+                PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
+                int attackState = this._attackController.OnTick(tickInputs.AttackInput);
+
+                this._serverStateBuffer[bufferIndex] = new(tickInputs.Tick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
+            }
+
+            if (bufferIndex != -1)
+                this.SendStateToServerRpc(this._serverStateBuffer[bufferIndex]);
+        }
+    }
+
+    [ServerRpc]
+    private void SendInputToServerRpc(TickInputs tickInputs) => this._serverInputQueue.Enqueue(tickInputs);
+    [ServerRpc(RequireOwnership = false)]
+    private void SendStateToServerRpc(TickStates tickStates) => this.SendStateToClientRpc(tickStates);
+    [ClientRpc]
+    private void SendStateToClientRpc(TickStates tickStates) => this._clientLatestServerState = tickStates;
+
+    // Delete when done with CCP
     private void DoTestingLogic(int currentTick)
     {
         if (!this._isSimulating)
@@ -107,7 +253,8 @@ public class PlayerPredictionController : NetworkBehaviour
         }
     }
 
-    private struct TickInputs
+    [Serializable]
+    private struct TickInputs : INetworkSerializable
     {
         public int Tick;
         public bool JumpAndGravityInput;
@@ -125,9 +272,34 @@ public class PlayerPredictionController : NetworkBehaviour
             this.CameraInput = cameraInput;
             this.AttackInput = attackInput;
         }
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            if (serializer.IsReader)
+            {
+                var reader = serializer.GetFastBufferReader();
+                reader.ReadValueSafe(out Tick);
+                reader.ReadValueSafe(out JumpAndGravityInput);
+                reader.ReadValueSafe(out MoveInput);
+                reader.ReadValueSafe(out MoveVelocityInput);
+                reader.ReadValueSafe(out CameraInput);
+                reader.ReadValueSafe(out AttackInput);
+            }
+            else
+            {
+                var writer = serializer.GetFastBufferWriter();
+                writer.WriteValueSafe(Tick);
+                writer.WriteValueSafe(JumpAndGravityInput);
+                writer.WriteValueSafe(MoveInput);
+                writer.WriteValueSafe(MoveVelocityInput);
+                writer.WriteValueSafe(CameraInput);
+                writer.WriteValueSafe(AttackInput);
+            }
+        }
     }
 
-    private struct TickStates
+    [Serializable]
+    private struct TickStates : INetworkSerializable
     {
         public int Tick;
         public ThirdPersonController.JumpAndGravityState JumpAndGravityState;
@@ -146,6 +318,32 @@ public class PlayerPredictionController : NetworkBehaviour
             this.CameraState = cameraState;
             this.AnimatorState = animatorState;
             this.AttackState = attackState;
+        }
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            if (serializer.IsReader)
+            {
+                var reader = serializer.GetFastBufferReader();
+                reader.ReadValueSafe(out Tick);
+                reader.ReadValueSafe(out JumpAndGravityState);
+                reader.ReadValueSafe(out GroundedState);
+                reader.ReadValueSafe(out MoveState);
+                reader.ReadValueSafe(out CameraState);
+                reader.ReadValueSafe(out AnimatorState);
+                reader.ReadValueSafe(out AttackState);
+            }
+            else
+            {
+                var writer = serializer.GetFastBufferWriter();
+                writer.WriteValueSafe(Tick);
+                writer.WriteValueSafe(JumpAndGravityState);
+                writer.WriteValueSafe(GroundedState);
+                writer.WriteValueSafe(MoveState);
+                writer.WriteValueSafe(CameraState);
+                writer.WriteValueSafe(AnimatorState);
+                writer.WriteValueSafe(AttackState);
+            }
         }
     }
 }

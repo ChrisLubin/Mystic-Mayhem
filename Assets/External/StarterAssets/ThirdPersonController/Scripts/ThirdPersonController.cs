@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Cinemachine;
+using Unity.Netcode;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM 
 using UnityEngine.InputSystem;
@@ -193,7 +195,7 @@ namespace StarterAssets
         public void SetMoveState(MoveState moveState)
         {
             _animationBlend = moveState.AnimationBlend;
-            _mainCamera.transform.eulerAngles = moveState.MainCameraEulerAngles;
+            CinemachineCameraTarget.transform.eulerAngles = moveState.MainCameraEulerAngles;
             transform.eulerAngles = moveState.TransformEurlerAngles;
             _rotationVelocity = moveState.RotationVelocity;
             _verticalVelocity = moveState.VerticalVelocty;
@@ -306,7 +308,7 @@ namespace StarterAssets
         // If doing simulation for first tick during resimulation window use velocity = isSimulating ? (previous tick state velocity) : _controller.velocity
         // Make sure to set animationController state before simulating this to be accurate. (Set this tick's animation state to the previous tick's animation state)
         // input props - _input.sprint, _input.move (2 value are either -1f, 0f, or 1f), 
-        // state props - IsAttacking, IsTakingDamage, CanCombo, _controller.velocity (only use x & y even tho it's Vector3), _animationBlend, _mainCamera.transform.eulerAngles.y, transform.eulerAngles.y, _rotationVelocity, _verticalVelocity
+        // state props - IsAttacking, IsTakingDamage, CanCombo, _controller.velocity (only use x & y even tho it's Vector3), _animationBlend, CinemachineCameraTarget.transform.eulerAngles.y, transform.eulerAngles.y, _rotationVelocity, _verticalVelocity
 
         private MoveState Move(MoveInput moveInput, Vector3 _)
         {
@@ -358,7 +360,7 @@ namespace StarterAssets
             if (moveInput.Move != Vector2.zero)
             {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
-                                  _mainCamera.transform.eulerAngles.y;
+                                  CinemachineCameraTarget.transform.eulerAngles.y;
 
                 if (shouldLockPlayerRotation)
                     _targetRotation = transform.eulerAngles.y;
@@ -383,7 +385,7 @@ namespace StarterAssets
                 _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
             }
 
-            return new(_controller.velocity, _animationBlend, _mainCamera.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position, this._lastPosition);
+            return new(_controller.velocity, _animationBlend, CinemachineCameraTarget.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position, this._lastPosition);
         }
 
         // Don't forget to do _input.look = Vector2.zero; after done simulating
@@ -396,7 +398,7 @@ namespace StarterAssets
             if (lookInput.sqrMagnitude >= _threshold && !LockCameraPosition)
             {
                 //Don't multiply mouse input by Time.deltaTime;
-                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : TickSystem.MIN_TIME_BETWEEN_TICKS;
+                float deltaTimeMultiplier = true ? 1.0f : TickSystem.MIN_TIME_BETWEEN_TICKS;
 
                 _cinemachineTargetYaw += lookInput.x * deltaTimeMultiplier;
                 _cinemachineTargetPitch += lookInput.y * deltaTimeMultiplier;
@@ -440,7 +442,7 @@ namespace StarterAssets
             {
                 if (FootstepAudioClips.Length > 0)
                 {
-                    var index = Random.Range(0, FootstepAudioClips.Length);
+                    var index = UnityEngine.Random.Range(0, FootstepAudioClips.Length);
                     AudioSource.PlayClipAtPoint(FootstepAudioClips[index], transform.TransformPoint(_controller.center), FootstepAudioVolume);
                 }
             }
@@ -454,7 +456,8 @@ namespace StarterAssets
             }
         }
 
-        public struct MoveInput
+        [Serializable]
+        public struct MoveInput : INetworkSerializable
         {
             public bool Sprint;
             public Vector2 Move;
@@ -464,9 +467,26 @@ namespace StarterAssets
                 this.Sprint = sprint;
                 this.Move = move;
             }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Sprint);
+                    reader.ReadValueSafe(out Move);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Sprint);
+                    writer.WriteValueSafe(Move);
+                }
+            }
         }
 
-        public struct JumpAndGravityState
+        [Serializable]
+        public struct JumpAndGravityState : INetworkSerializable
         {
             public float VerticalVelocity;
             public float JumpTimeoutDelta;
@@ -480,9 +500,30 @@ namespace StarterAssets
                 this.FallTimeoutDelta = fallTimeoutDelta;
                 this.Jump = jump;
             }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out VerticalVelocity);
+                    reader.ReadValueSafe(out JumpTimeoutDelta);
+                    reader.ReadValueSafe(out FallTimeoutDelta);
+                    reader.ReadValueSafe(out Jump);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(VerticalVelocity);
+                    writer.WriteValueSafe(JumpTimeoutDelta);
+                    writer.WriteValueSafe(FallTimeoutDelta);
+                    writer.WriteValueSafe(Jump);
+                }
+            }
         }
 
-        public struct GroundedState
+        [Serializable]
+        public struct GroundedState : INetworkSerializable
         {
             public bool Grounded;
 
@@ -490,9 +531,24 @@ namespace StarterAssets
             {
                 this.Grounded = grounded;
             }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Grounded);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Grounded);
+                }
+            }
         }
 
-        public struct MoveState
+        [Serializable]
+        public struct MoveState : INetworkSerializable
         {
             public Vector3 Velocity;
             public float AnimationBlend;
@@ -514,9 +570,38 @@ namespace StarterAssets
                 this.TransformPosition = transformPosition;
                 this.LastPosition = lastPosition;
             }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Velocity);
+                    reader.ReadValueSafe(out AnimationBlend);
+                    reader.ReadValueSafe(out MainCameraEulerAngles);
+                    reader.ReadValueSafe(out TransformEurlerAngles);
+                    reader.ReadValueSafe(out RotationVelocity);
+                    reader.ReadValueSafe(out VerticalVelocty);
+                    reader.ReadValueSafe(out TransformPosition);
+                    reader.ReadValueSafe(out LastPosition);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Velocity);
+                    writer.WriteValueSafe(AnimationBlend);
+                    writer.WriteValueSafe(MainCameraEulerAngles);
+                    writer.WriteValueSafe(TransformEurlerAngles);
+                    writer.WriteValueSafe(RotationVelocity);
+                    writer.WriteValueSafe(VerticalVelocty);
+                    writer.WriteValueSafe(TransformPosition);
+                    writer.WriteValueSafe(LastPosition);
+                }
+            }
         }
 
-        public struct CameraState
+        [Serializable]
+        public struct CameraState : INetworkSerializable
         {
             public float CinemachineTargetYaw;
             public float CinemachineTargetPitch;
@@ -525,6 +610,22 @@ namespace StarterAssets
             {
                 this.CinemachineTargetYaw = cinemachineTargetYaw;
                 this.CinemachineTargetPitch = cinemachineTargetPitch;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out CinemachineTargetYaw);
+                    reader.ReadValueSafe(out CinemachineTargetPitch);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(CinemachineTargetYaw);
+                    writer.WriteValueSafe(CinemachineTargetPitch);
+                }
             }
         }
     }

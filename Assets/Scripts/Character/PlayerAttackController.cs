@@ -18,12 +18,6 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 
     public int OnTick(AttackInput input)
     {
-        if (!this.IsOwner)
-        {
-            Debug.Log("WAS NOT THE OWNER!!!!!!!");
-            return 0;
-        }
-
         if (this._animationController.IsTakingDamage || (this._animationController.IsAttacking && !this._animationController.CanCombo))
             return this._lastAttackId;
         if (input == AttackInput.None)
@@ -71,6 +65,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, true);
 
+        if (!this.IsOwner) { return; }
         if (this._animationController.CanCombo)
             this._logger.Log(attackId + " - Light Combo");
         else
@@ -100,6 +95,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, false);
 
+        if (!this.IsOwner) { return; }
         if (this._animationController.CanCombo)
             this._logger.Log(attackId + " - Heavy Combo");
         else
