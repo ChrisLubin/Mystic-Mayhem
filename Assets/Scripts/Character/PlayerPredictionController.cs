@@ -25,6 +25,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private const int _BUFFER_SIZE = 1024; // ~17 seconds
     private const float _MAX_POSITION_THRESHOLD = 0.03f;
     private const float _MAX_ROTATION_THRESHOLD = 25f;
+    // public static event Action<int> OnTickDiffBetweenLocalClientAndServer;
 
     // Client
     private TickInputs[] _clientInputBuffer;
@@ -81,6 +82,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         TickStates clientTickStatesForLatestServerStates = this._clientStateBuffer[latestServerStateBufferIndex];
         float positionDistance = Vector3.Distance(this._clientLatestServerState.MoveState.TransformPosition, clientTickStatesForLatestServerStates.MoveState.TransformPosition);
         float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, this._clientLatestServerState.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForLatestServerStates.MoveState.TransformEurlerAngles.y, 0f));
+        bool isAnimationDifferent = clientTickStatesForLatestServerStates.AnimatorState.AnimationHash != this._clientLatestServerState.AnimatorState.AnimationHash;
 
         if (positionDistance > _MAX_POSITION_THRESHOLD)
         {
@@ -90,6 +92,11 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         else if (rotationDistance > _MAX_ROTATION_THRESHOLD)
         {
             Debug.Log($"Player {this.OwnerClientId} reconciled due to ROTATION on tick {this._clientLatestServerState.Tick}");
+            return true;
+        }
+        else if (isAnimationDifferent)
+        {
+            Debug.Log($"Player {this.OwnerClientId} reconciled due to ANIMATION on tick {this._clientLatestServerState.Tick}");
             return true;
         }
 
@@ -184,6 +191,12 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     {
         this._clientLatestServerState = tickStates;
         this._serverDummyController.SetState(tickStates.MoveState.TransformPosition, tickStates.MoveState.TransformEurlerAngles.y, tickStates.AnimatorState, tickStates.MoveState);
+
+        // if (this.IsOwner)
+        // {
+        //     OnTickDiffBetweenLocalClientAndServer?.Invoke(this._clientLastProcessedState.Tick - tickStates.Tick);
+        //     Debug.Log($"Tick diff is {this._clientLastProcessedState.Tick - tickStates.Tick}");
+        // }
     }
 
     // Delete when done with CCP
