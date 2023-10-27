@@ -46,6 +46,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
+        this._animator.speed = 0f;
         this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
         this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
         this._parryIdHash = Animator.StringToHash(_PARRY_ID_PARAMETER);
@@ -66,15 +67,14 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
 
         int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
         AnimatorStateInfo clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
-        return new AnimatorState(clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash));
+        return new AnimatorState(clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash), layerIndex == 0);
     }
 
     public void SetAnimatorState(AnimatorState state)
     {
         this._animator.speed = 1f;
         this._animator.Play(state.AnimationHash, -1, state.AnimationNormalizedTime);
-        // this._animator.Update(0f); // Could also work to make more deteministic
-        this._animator.Update(0.000000000001f);
+        this._animator.Update(0f);
         this.SetInteger(this._parryIdHash, state.ParryId);
         this.SetBool(this._isParryingHash, state.IsParrying);
         this.SetBool(this._canBeParriedHash, state.CanBeParried);
@@ -169,8 +169,9 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         public int AttackId;
         public bool IsTakingDamage;
         public int TakeDamageId;
+        public bool IsLayerIndexIsZero; // Only used to visualize server version of player
 
-        public AnimatorState(int animationHash, float animationNormalizedTime, int parryId, bool isParrying, bool canBeParried, bool canCombo, bool isCanComboWindowOver, bool CanDealMeleeDamage, bool IsAttacking, int attackId, bool isTakingDamage, int takeDamageId)
+        public AnimatorState(int animationHash, float animationNormalizedTime, int parryId, bool isParrying, bool canBeParried, bool canCombo, bool isCanComboWindowOver, bool CanDealMeleeDamage, bool IsAttacking, int attackId, bool isTakingDamage, int takeDamageId, bool isLayerIndexZero)
         {
             this.AnimationHash = animationHash;
             this.AnimationNormalizedTime = animationNormalizedTime;
@@ -184,6 +185,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
             this.AttackId = attackId;
             this.IsTakingDamage = isTakingDamage;
             this.TakeDamageId = takeDamageId;
+            this.IsLayerIndexIsZero = isLayerIndexZero;
         }
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -203,6 +205,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
                 reader.ReadValueSafe(out AttackId);
                 reader.ReadValueSafe(out IsTakingDamage);
                 reader.ReadValueSafe(out TakeDamageId);
+                reader.ReadValueSafe(out IsLayerIndexIsZero);
             }
             else
             {
@@ -219,6 +222,7 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
                 writer.WriteValueSafe(AttackId);
                 writer.WriteValueSafe(IsTakingDamage);
                 writer.WriteValueSafe(TakeDamageId);
+                writer.WriteValueSafe(IsLayerIndexIsZero);
             }
         }
     }

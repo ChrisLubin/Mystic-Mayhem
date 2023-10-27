@@ -18,6 +18,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private bool _isRecording = false;
     private bool _isSimulating = false;
     private int _currentSimulatedTick = -1;
+    [SerializeField] private Transform _serverDummyPrefab;
+    private PlayerServerDummyController _serverDummyController;
 
     // Shared
     private const int _BUFFER_SIZE = 1024; // ~17 seconds
@@ -29,12 +31,10 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private TickStates[] _clientStateBuffer;
     private TickStates _clientLatestServerState;
     private TickStates _clientLastProcessedState;
-    [SerializeField] private Transform _client;
 
     // Server
     private Queue<TickInputs> _serverInputQueue;
     private TickStates[] _serverStateBuffer;
-    [SerializeField] private Transform _server;
 
     protected override void Awake()
     {
@@ -42,6 +42,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         this._movementController = GetComponent<ThirdPersonController>();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._attackController = GetComponent<PlayerAttackController>();
+        this._serverDummyController = Instantiate(this._serverDummyPrefab, transform.position, Quaternion.identity, null).GetComponent<PlayerServerDummyController>();
     }
 
     private void Start()
@@ -62,14 +63,6 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     {
         base.OnDestroy();
         TickSystem.OnTick -= this.OnTick;
-    }
-
-    private void Update()
-    {
-        this._client.transform.position = this._clientLastProcessedState.MoveState.TransformPosition;
-        this._client.transform.eulerAngles = this._clientLastProcessedState.MoveState.TransformEurlerAngles;
-        this._server.transform.position = this._clientLatestServerState.MoveState.TransformPosition;
-        this._server.transform.eulerAngles = this._clientLatestServerState.MoveState.TransformEurlerAngles;
     }
 
     private void OnTick(int currentTick)
@@ -187,7 +180,11 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     [ServerRpc(RequireOwnership = false)]
     private void SendStateToServerRpc(TickStates tickStates) => this.SendStateToClientRpc(tickStates);
     [ClientRpc]
-    private void SendStateToClientRpc(TickStates tickStates) => this._clientLatestServerState = tickStates;
+    private void SendStateToClientRpc(TickStates tickStates)
+    {
+        this._clientLatestServerState = tickStates;
+        this._serverDummyController.SetState(tickStates.MoveState.TransformPosition, tickStates.MoveState.TransformEurlerAngles.y, tickStates.AnimatorState, tickStates.MoveState);
+    }
 
     // Delete when done with CCP
     private void DoTestingLogic(int currentTick)
