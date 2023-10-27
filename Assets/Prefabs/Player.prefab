@@ -565,8 +565,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _serverDummyPrefab: {fileID: 7126329708863750466, guid: 245541055dc9c1f4c8145d7b8de64f51,
     type: 3}
-  _client: {fileID: 0}
-  _server: {fileID: 0}
 --- !u!1 &1489742314011350481
 GameObject:
   m_ObjectHideFlags: 0

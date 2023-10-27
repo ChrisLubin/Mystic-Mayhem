@@ -20,6 +20,14 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
     {
         if (this._animationController.IsTakingDamage || (this._animationController.IsAttacking && !this._animationController.CanCombo))
             return this._lastAttackId;
+
+        // Delete after finalizing CCP for parries
+        // if (this.IsOwner && !this._animationController.IsAttacking && !this._animationController.IsParrying && this._parryController.CanParry())
+        // {
+        //     this._parryController.DoParry();
+        //     return this._lastAttackId;
+        // }
+
         if (input == AttackInput.None)
             return this._lastAttackId;
 

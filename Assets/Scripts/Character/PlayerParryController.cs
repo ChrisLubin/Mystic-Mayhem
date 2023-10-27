@@ -45,19 +45,12 @@ public class PlayerParryController : NetworkBehaviour
         PlayerParryController[] sortedPlayerControllersByDistance = playerControllersThatCanBeParried.OrderBy(player => Vector3.Distance(transform.position, player.transform.position)).ToArray();
         WeaponSO currentWeaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         this._animationController.PlayParryAnimation(currentWeaponSO.DoParryId, false);
-        sortedPlayerControllersByDistance[0].GetParriedServer();
+        sortedPlayerControllersByDistance[0].GetParried();
     }
 
-    public void GetParriedLocal(bool isFromServer = false)
+    private void GetParried()
     {
         WeaponSO currentWeaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         this._animationController.PlayParryAnimation(currentWeaponSO.GetParriedId, true);
-    }
-
-    public void GetParriedServer()
-    {
-        if (this.IsOwner) { return; }
-
-        this._networkController.GetParriedServerRpc(this.OwnerClientId);
     }
 }
