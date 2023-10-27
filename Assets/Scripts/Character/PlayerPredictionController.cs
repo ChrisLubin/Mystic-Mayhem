@@ -25,7 +25,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private const int _BUFFER_SIZE = 1024; // ~17 seconds
     private const float _MAX_POSITION_THRESHOLD = 0.03f;
     private const float _MAX_ROTATION_THRESHOLD = 25f;
-    // public static event Action<int> OnTickDiffBetweenLocalClientAndServer;
+    public static event Action<int> OnTickDiffBetweenLocalClientAndServer;
 
     // Client
     private TickInputs[] _clientInputBuffer;
@@ -192,11 +192,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         this._clientLatestServerState = tickStates;
         this._serverDummyController.SetState(tickStates.MoveState.TransformPosition, tickStates.MoveState.TransformEurlerAngles.y, tickStates.AnimatorState, tickStates.MoveState);
 
-        // if (this.IsOwner)
-        // {
-        //     OnTickDiffBetweenLocalClientAndServer?.Invoke(this._clientLastProcessedState.Tick - tickStates.Tick);
-        //     Debug.Log($"Tick diff is {this._clientLastProcessedState.Tick - tickStates.Tick}");
-        // }
+        if (this.IsOwner)
+            OnTickDiffBetweenLocalClientAndServer?.Invoke(this._clientLastProcessedState.Tick - tickStates.Tick);
     }
 
     // Delete when done with CCP
