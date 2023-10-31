@@ -36,7 +36,7 @@ public class PlayerWeaponManager : NetworkBehaviorAutoDisable<PlayerWeaponManage
     {
         base.OnNetworkSpawn();
         if (!this.IsOwner)
-            this.OnCurrentWeaponChange(WeaponName.None, this._networkController.CurrentWeaponName.Value);
+            this.OnCurrentWeaponChange(WeaponName.None, this._weaponOnSpawnName);
     }
 
     private void Update()
