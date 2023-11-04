@@ -14,36 +14,37 @@ public class PlayerDamageController : MonoBehaviour
         this._meleeDamageColliderController = GetComponent<PlayerMeleeWeaponDamageColliderController>();
         this._animationController.OnReachedDamageFrame += OnReachedDamageFrame;
         this._animationController.OnAnimationInterrupted += OnAnimationInterrupted;
-        this._meleeDamageColliderController.OnCollideWithDamageable += this.OnWeaponCollideWithDamageable;
+        this._meleeDamageColliderController.OnCollideWithPlayer += this.OnWeaponCollideWithPlayer;
     }
 
     private void OnDestroy()
     {
         this._animationController.OnReachedDamageFrame -= OnReachedDamageFrame;
         this._animationController.OnAnimationInterrupted -= OnAnimationInterrupted;
-        this._meleeDamageColliderController.OnCollideWithDamageable -= this.OnWeaponCollideWithDamageable;
+        this._meleeDamageColliderController.OnCollideWithPlayer -= this.OnWeaponCollideWithPlayer;
     }
 
     private void OnReachedDamageFrame()
     {
         foreach (QueuedDamage queuedDamage in this._damageQueue)
         {
-            queuedDamage.Damageable.TakeDamageServer(queuedDamage.Damage);
+            if (!PlayerManager.Instance.TryGetPlayer(queuedDamage.PlayerClientId, out PlayerController player)) { continue; }
+            player.TakeDamageServer(queuedDamage.Damage);
         }
         this._damageQueue.Clear();
     }
 
-    private void OnWeaponCollideWithDamageable(IDamageable damageable, int damage) => this._damageQueue.Add(new(damageable, damage));
+    private void OnWeaponCollideWithPlayer(ulong clientId, int damage) => this._damageQueue.Add(new(clientId, damage));
     private void OnAnimationInterrupted() => this._damageQueue.Clear();
 
     public struct QueuedDamage
     {
-        public IDamageable Damageable;
+        public ulong PlayerClientId;
         public int Damage;
 
-        public QueuedDamage(IDamageable damageable, int damage)
+        public QueuedDamage(ulong playerClientId, int damage)
         {
-            this.Damageable = damageable;
+            this.PlayerClientId = playerClientId;
             this.Damage = damage;
         }
     }

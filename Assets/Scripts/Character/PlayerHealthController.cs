@@ -45,10 +45,10 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
 
     public void TakeDamageServer(int damage)
     {
-        if (!this.IsHost || this._animationController.IsParrying) { return; }
+        if (this._animationController.IsParrying) { return; }
 
-        UnityEngine.Debug.Log($"Took {damage} damage");
-        this._networkController.CurrentHealth.Value = Math.Clamp(this._networkController.CurrentHealth.Value - damage, _PLAYER_MIN_HEALTH, PLAYER_MAX_HEALTH);
+        if (this.IsHost)
+            this._networkController.CurrentHealth.Value = Math.Clamp(this._networkController.CurrentHealth.Value - damage, _PLAYER_MIN_HEALTH, PLAYER_MAX_HEALTH);
         WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         if (weaponSO == null) { return; }
         this._animationController.PlayTakeDamageAnimation(weaponSO.TakeDamageFrontId);
