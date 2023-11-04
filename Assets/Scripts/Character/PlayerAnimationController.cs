@@ -42,6 +42,9 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     public bool IsTakingDamage { get => this.GetBool(this._isTakingDamageHash); }
     public int CurrentAttackId { get => this.GetInteger(this._attackIdHash); }
 
+    public event Action OnReachedDamageFrame;
+    public event Action OnAnimationInterrupted;
+
     protected override void Awake()
     {
         base.Awake();
@@ -142,9 +145,15 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this._animator.SetInteger(hash, newValue);
     }
 
+    public void AnimationInterrupted() => this.OnAnimationInterrupted?.Invoke();
+
     // Called from animation events
     private void EnableCanDealMeleeDamage() => this.SetBool(this._canDealMeleeDamageHash, true);
-    private void DisableCanDealMeleeDamage() => this.SetBool(this._canDealMeleeDamageHash, false);
+    private void DisableCanDealMeleeDamage()
+    {
+        this.SetBool(this._canDealMeleeDamageHash, false);
+        this.OnReachedDamageFrame?.Invoke();
+    }
     private void EnableCanCombo() => this.SetBool(this._canComboHash, true);
     private void DisableCanCombo()
     {

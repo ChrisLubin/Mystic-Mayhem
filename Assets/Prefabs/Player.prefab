@@ -100,6 +100,7 @@ GameObject:
   - component: {fileID: 3749100078104314661}
   - component: {fileID: 6883965588894969065}
   - component: {fileID: 4224373056278312457}
+  - component: {fileID: 9086775598745824621}
   m_Layer: 7
   m_Name: Player
   m_TagString: Damagable
@@ -565,6 +566,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _serverDummyPrefab: {fileID: 7126329708863750466, guid: 245541055dc9c1f4c8145d7b8de64f51,
     type: 3}
+--- !u!114 &9086775598745824621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373715124106623315}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd318473feaa8e6448bb7d652669f108, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1489742314011350481
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -8,6 +9,8 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
     private Collider[] _playerColliders;
 
     [SerializeField] private DamagerColliderController _weapon;
+
+    public event Action<IDamageable, int> OnCollideWithDamageable;
 
     private void Awake()
     {
@@ -52,6 +55,6 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
 
         WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         int damage = this._animationController.CurrentAttackId == weaponSO.HeavyAttackOneId ? weaponSO.HeavyAttackDamage : weaponSO.LightAttackDamage;
-        damageable.TakeDamageServer(damage);
+        this.OnCollideWithDamageable(damageable, damage);
     }
 }
