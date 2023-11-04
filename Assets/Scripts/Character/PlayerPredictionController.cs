@@ -284,7 +284,6 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         {
             int tickDiff = this._clientLastProcessedState.Tick - tickStates.Tick;
             OnTickDiffBetweenLocalClientAndServer?.Invoke(tickDiff);
-            CanvasDebugController.Instance.SetText(tickDiff.ToString());
         }
     }
 

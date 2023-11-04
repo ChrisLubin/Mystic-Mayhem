@@ -6,6 +6,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
     private PlayerNetworkController _networkController;
     private PlayerParryController _parryController;
 
+    private AttackInput _attackInput = AttackInput.None;
     private int _lastAttackId;
 
     protected override void Awake()
@@ -41,15 +42,9 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
 
     public AttackInput GetAttackInput()
     {
-        AttackInput input;
-        if (Input.GetKeyDown(KeyCode.Mouse0))
-            input = AttackInput.LeftClick;
-        else if (Input.GetKeyDown(KeyCode.Mouse1))
-            input = AttackInput.RightClick;
-        else
-            input = AttackInput.None;
-
-        return input;
+        AttackInput latestInput = this._attackInput;
+        this._attackInput = AttackInput.None;
+        return latestInput;
     }
 
     public void SetAttackState(int lastAttackState) => this._lastAttackId = lastAttackState;
@@ -108,6 +103,16 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
             this._logger.Log(attackId + " - Heavy Combo");
         else
             this._logger.Log(attackId);
+    }
+
+    private void Update()
+    {
+        if (this._attackInput != AttackInput.None) { return; }
+
+        if (Input.GetKeyDown(KeyCode.Mouse0))
+            this._attackInput = AttackInput.LeftClick;
+        else if (Input.GetKeyDown(KeyCode.Mouse1))
+            this._attackInput = AttackInput.RightClick;
     }
 
     public enum AttackInput
