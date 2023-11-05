@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class PlayerDamageController : MonoBehaviour
@@ -26,6 +27,7 @@ public class PlayerDamageController : MonoBehaviour
 
     private void OnReachedDamageFrame()
     {
+        this._damageQueue = this._damageQueue.Distinct().ToList();
         foreach (QueuedDamage queuedDamage in this._damageQueue)
         {
             if (!PlayerManager.Instance.TryGetPlayer(queuedDamage.PlayerClientId, out PlayerController player)) { continue; }

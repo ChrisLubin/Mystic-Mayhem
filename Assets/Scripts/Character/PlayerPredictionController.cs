@@ -9,6 +9,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private ThirdPersonController _movementController;
     private PlayerAnimationController _animationController;
     private PlayerAttackController _attackController;
+    private PlayerMeleeWeaponDamageColliderController _weaponDamageController;
 
     private List<TickInputs> _inputs = new();
     private List<TickStates> _states = new();
@@ -52,6 +53,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         this._movementController = GetComponent<ThirdPersonController>();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._attackController = GetComponent<PlayerAttackController>();
+        this._weaponDamageController = GetComponent<PlayerMeleeWeaponDamageColliderController>();
         this._serverDummyController = Instantiate(this._serverDummyPrefab, transform.position, Quaternion.identity, null).GetComponent<PlayerServerDummyController>();
     }
 
@@ -168,6 +170,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                     var tickToProcessMovementStates = this._movementController.OnTick(tickToProcessInputs.JumpAndGravityInput, tickToProcessInputs.MoveInput, tickToProcessInputs.MoveVelocityInput, tickToProcessInputs.CameraInput);
                     PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
                     int tickToProcessAttackState = this._attackController.OnTick(tickToProcessInputs.AttackInput);
+                    this._weaponDamageController.OnTick();
                     TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState);
 
                     this._clientStateBuffer[tickToProcessBufferIndex] = tickToProcessTickStates;
@@ -187,6 +190,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
             PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
             int attackState = this._attackController.OnTick(attackInput);
+            this._weaponDamageController.OnTick();
 
             TickInputs tickInputs = new(currentTick, jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput, attackInput);
             TickStates tickStates = new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
@@ -211,6 +215,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 var movementStates = this._movementController.OnTick(tickInputs.JumpAndGravityInput, tickInputs.MoveInput, tickInputs.MoveVelocityInput, tickInputs.CameraInput);
                 PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
                 int attackState = this._attackController.OnTick(tickInputs.AttackInput);
+                this._weaponDamageController.OnTick();
 
                 this._serverStateBuffer[bufferIndex] = new(tickInputs.Tick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
             }
@@ -246,6 +251,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                     var tickToProcessMovementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
                     PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
                     int tickToProcessAttackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
+                    this._weaponDamageController.OnTick();
                     TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState);
 
                     this._clientStateBuffer[tickToProcessBufferIndex] = tickToProcessTickStates;
@@ -258,6 +264,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
             var movementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
             PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
             int attackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
+            this._weaponDamageController.OnTick();
 
             TickStates tickStates = new(this._nonOwnerCurrentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
             this._clientStateBuffer[bufferIndex] = tickStates;
