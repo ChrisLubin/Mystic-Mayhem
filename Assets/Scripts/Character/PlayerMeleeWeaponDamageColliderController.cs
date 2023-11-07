@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -9,8 +9,6 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
     private Collider[] _playerColliders;
 
     [SerializeField] private DamagerColliderController _weapon;
-
-    public event Action<ulong, int> OnCollideWithPlayer;
 
     private void Awake()
     {
@@ -25,13 +23,16 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
         this._weapon.SetIgnoreColliders(this._playerColliders);
     }
 
-    public void OnTick()
+    // Call from PlayerDamageController instead of PlayerPredictionController
+    public CollisionEvent[] OnTick()
     {
         this._weapon.SetEnabled(this._animationController.CanDealMeleeDamage);
-        if (!this._animationController.CanDealMeleeDamage) { return; }
+        if (!this._animationController.CanDealMeleeDamage) { return null; }
 
         Collider[] colliders = this._weapon.CheckCollisions(LayerMask.GetMask(Constants.LayerNames.Player));
-        if (colliders == null || colliders.Length == 0) { return; }
+        if (colliders == null || colliders.Length == 0) { return null; }
+
+        List<CollisionEvent> collisionEvents = new();
 
         foreach (Collider collider in colliders)
         {
@@ -41,7 +42,21 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
 
             WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
             int damage = this._animationController.CurrentAttackId == weaponSO.HeavyAttackOneId ? weaponSO.HeavyAttackDamage : weaponSO.LightAttackDamage;
-            this.OnCollideWithPlayer(networkController.OwnerClientId, damage);
+            collisionEvents.Add(new(networkController.OwnerClientId, damage));
+        }
+
+        return collisionEvents.ToArray();
+    }
+
+    public struct CollisionEvent
+    {
+        public ulong PlayerClientId;
+        public int Damage;
+
+        public CollisionEvent(ulong playerClientId, int damage)
+        {
+            this.PlayerClientId = playerClientId;
+            this.Damage = damage;
         }
     }
 }

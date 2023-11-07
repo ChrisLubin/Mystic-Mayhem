@@ -1,13 +1,14 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using static PlayerMeleeWeaponDamageColliderController;
+using DamageState = System.Collections.Generic.IDictionary<ulong, PlayerMeleeWeaponDamageColliderController.CollisionEvent>;
 
 public class PlayerDamageController : MonoBehaviour
 {
     private PlayerAnimationController _animationController;
     private PlayerMeleeWeaponDamageColliderController _meleeDamageColliderController;
 
-    private List<QueuedDamage> _damageQueue = new();
+    private IDictionary<ulong, CollisionEvent> _collisionEventMap = new Dictionary<ulong, CollisionEvent>();
 
     private void Awake()
     {
@@ -15,39 +16,40 @@ public class PlayerDamageController : MonoBehaviour
         this._meleeDamageColliderController = GetComponent<PlayerMeleeWeaponDamageColliderController>();
         this._animationController.OnReachedDamageFrame += OnReachedDamageFrame;
         this._animationController.OnAnimationInterrupted += OnAnimationInterrupted;
-        this._meleeDamageColliderController.OnCollideWithPlayer += this.OnWeaponCollideWithPlayer;
     }
 
     private void OnDestroy()
     {
         this._animationController.OnReachedDamageFrame -= OnReachedDamageFrame;
         this._animationController.OnAnimationInterrupted -= OnAnimationInterrupted;
-        this._meleeDamageColliderController.OnCollideWithPlayer -= this.OnWeaponCollideWithPlayer;
+    }
+
+    public DamageState OnTick()
+    {
+        CollisionEvent[] collisionEvents = this._meleeDamageColliderController.OnTick();
+        if (collisionEvents == null) { return this._collisionEventMap; }
+
+        foreach (CollisionEvent collisionEvent in collisionEvents)
+        {
+            if (this._collisionEventMap.ContainsKey(collisionEvent.PlayerClientId)) { continue; } // Deal damage only once to a player per attack
+
+            this._collisionEventMap.Add(collisionEvent.PlayerClientId, collisionEvent);
+        }
+
+        return this._collisionEventMap;
     }
 
     private void OnReachedDamageFrame()
     {
-        this._damageQueue = this._damageQueue.Distinct().ToList();
-        foreach (QueuedDamage queuedDamage in this._damageQueue)
+        foreach (CollisionEvent collisionEvent in this._collisionEventMap.Values)
         {
-            if (!PlayerManager.Instance.TryGetPlayer(queuedDamage.PlayerClientId, out PlayerController player)) { continue; }
-            player.TakeDamageServer(queuedDamage.Damage);
+            if (!PlayerManager.Instance.TryGetPlayer(collisionEvent.PlayerClientId, out PlayerController player)) { continue; }
+            player.TakeDamageServer(collisionEvent.Damage);
         }
-        this._damageQueue.Clear();
+        this._collisionEventMap.Clear();
     }
 
-    private void OnWeaponCollideWithPlayer(ulong clientId, int damage) => this._damageQueue.Add(new(clientId, damage));
-    private void OnAnimationInterrupted() => this._damageQueue.Clear();
+    public void SetDamageState(DamageState state) => this._collisionEventMap = state;
 
-    public struct QueuedDamage
-    {
-        public ulong PlayerClientId;
-        public int Damage;
-
-        public QueuedDamage(ulong playerClientId, int damage)
-        {
-            this.PlayerClientId = playerClientId;
-            this.Damage = damage;
-        }
-    }
+    private void OnAnimationInterrupted() => this._collisionEventMap.Clear();
 }

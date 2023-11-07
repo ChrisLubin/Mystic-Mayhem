@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StarterAssets;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using static PlayerMeleeWeaponDamageColliderController;
+using PlayerDamageControllerDamageState = System.Collections.Generic.IDictionary<ulong, PlayerMeleeWeaponDamageColliderController.CollisionEvent>;
 
 public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredictionController>
 {
     private ThirdPersonController _movementController;
     private PlayerAnimationController _animationController;
     private PlayerAttackController _attackController;
-    private PlayerMeleeWeaponDamageColliderController _weaponDamageController;
+    private PlayerDamageController _damageController;
 
     private List<TickInputs> _inputs = new();
     private List<TickStates> _states = new();
@@ -53,7 +57,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         this._movementController = GetComponent<ThirdPersonController>();
         this._animationController = GetComponent<PlayerAnimationController>();
         this._attackController = GetComponent<PlayerAttackController>();
-        this._weaponDamageController = GetComponent<PlayerMeleeWeaponDamageColliderController>();
+        this._damageController = GetComponent<PlayerDamageController>();
         this._serverDummyController = Instantiate(this._serverDummyPrefab, transform.position, Quaternion.identity, null).GetComponent<PlayerServerDummyController>();
     }
 
@@ -119,6 +123,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         float positionDistance = Vector3.Distance(this._clientLatestServerState.MoveState.TransformPosition, clientTickStatesForLatestServerTick.MoveState.TransformPosition);
         float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, this._clientLatestServerState.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForLatestServerTick.MoveState.TransformEurlerAngles.y, 0f));
         bool isAnimationDifferent = clientTickStatesForLatestServerTick.AnimatorState.AnimationHash != this._clientLatestServerState.AnimatorState.AnimationHash;
+        bool isDamageQueueDifferent = clientTickStatesForLatestServerTick.DamageStateCount != this._clientLatestServerState.DamageStateCount;
 
         if (positionDistance > _MAX_POSITION_THRESHOLD)
         {
@@ -130,6 +135,12 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         {
             if (_SHOULD_SHOW_LOGS)
                 this._logger.Log($"Reconciled due to ROTATION on tick {this._clientLatestServerState.Tick}");
+            return true;
+        }
+        else if (isDamageQueueDifferent)
+        {
+            if (_SHOULD_SHOW_LOGS)
+                this._logger.Log($"Reconciled due to DAMAGE on tick {this._clientLatestServerState.Tick}");
             return true;
         }
         else if (isAnimationDifferent)
@@ -157,6 +168,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 this._movementController.SetCameraState(this._clientLatestServerState.CameraState);
                 this._animationController.SetAnimatorState(this._clientLatestServerState.AnimatorState);
                 this._attackController.SetAttackState(this._clientLatestServerState.AttackState);
+                this._damageController.SetDamageState(this._clientLatestServerState.DamageState);
 
                 this._clientStateBuffer[latestServerStateBufferIndex] = this._clientLatestServerState;
 
@@ -170,8 +182,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                     var tickToProcessMovementStates = this._movementController.OnTick(tickToProcessInputs.JumpAndGravityInput, tickToProcessInputs.MoveInput, tickToProcessInputs.MoveVelocityInput, tickToProcessInputs.CameraInput);
                     PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
                     int tickToProcessAttackState = this._attackController.OnTick(tickToProcessInputs.AttackInput);
-                    this._weaponDamageController.OnTick();
-                    TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState);
+                    PlayerDamageControllerDamageState tickToProcessDamageState = this._damageController.OnTick();
+                    TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState, tickToProcessDamageState);
 
                     this._clientStateBuffer[tickToProcessBufferIndex] = tickToProcessTickStates;
                     tickToProcess++;
@@ -190,10 +202,10 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
             PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
             int attackState = this._attackController.OnTick(attackInput);
-            this._weaponDamageController.OnTick();
+            PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
             TickInputs tickInputs = new(currentTick, jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput, attackInput);
-            TickStates tickStates = new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
+            TickStates tickStates = new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState);
             this._clientInputBuffer[bufferIndex] = tickInputs;
             this._clientStateBuffer[bufferIndex] = tickStates;
             this._clientLastProcessedState = tickStates;
@@ -215,9 +227,9 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 var movementStates = this._movementController.OnTick(tickInputs.JumpAndGravityInput, tickInputs.MoveInput, tickInputs.MoveVelocityInput, tickInputs.CameraInput);
                 PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
                 int attackState = this._attackController.OnTick(tickInputs.AttackInput);
-                this._weaponDamageController.OnTick();
+                PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
-                this._serverStateBuffer[bufferIndex] = new(tickInputs.Tick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
+                this._serverStateBuffer[bufferIndex] = new(tickInputs.Tick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState);
             }
 
             if (bufferIndex != -1)
@@ -239,6 +251,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 this._movementController.SetCameraState(this._clientLatestServerState.CameraState);
                 this._animationController.SetAnimatorState(this._clientLatestServerState.AnimatorState);
                 this._attackController.SetAttackState(this._clientLatestServerState.AttackState);
+                this._damageController.SetDamageState(this._clientLatestServerState.DamageState);
 
                 this._clientStateBuffer[latestServerStateBufferIndex] = this._clientLatestServerState;
 
@@ -251,8 +264,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                     var tickToProcessMovementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
                     PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
                     int tickToProcessAttackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
-                    this._weaponDamageController.OnTick();
-                    TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState);
+                    PlayerDamageControllerDamageState tickToProcessDamageState = this._damageController.OnTick();
+                    TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState, tickToProcessDamageState);
 
                     this._clientStateBuffer[tickToProcessBufferIndex] = tickToProcessTickStates;
                     tickToProcess++;
@@ -264,9 +277,9 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
             var movementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
             PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
             int attackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
-            this._weaponDamageController.OnTick();
+            PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
-            TickStates tickStates = new(this._nonOwnerCurrentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState);
+            TickStates tickStates = new(this._nonOwnerCurrentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState);
             this._clientStateBuffer[bufferIndex] = tickStates;
             this._nonOwnerCurrentTick++;
         }
@@ -309,11 +322,12 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
             PlayerAttackController.AttackInput attackInput = this._attackController.GetAttackInput();
             int attackState = this._attackController.OnTick(attackInput);
+            PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
             if (this._isRecording)
             {
                 this._inputs.Add(new(currentTick, jumpAndGravityInput, moveInput, moveVelocityInput, cameraInput, attackInput));
-                this._states.Add(new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState));
+                this._states.Add(new(currentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState));
             }
 
             if (Input.GetKeyDown(KeyCode.Q))
@@ -337,12 +351,14 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 this._movementController.SetCameraState(statesBeforeFirstSimulatedTick.CameraState);
                 this._animationController.SetAnimatorState(statesBeforeFirstSimulatedTick.AnimatorState);
                 this._attackController.SetAttackState(statesBeforeFirstSimulatedTick.AttackState);
+                this._damageController.SetDamageState(statesBeforeFirstSimulatedTick.DamageState);
             }
 
             TickInputs tickInputs = this._inputs[this._currentSimulatedTick];
             this._movementController.OnTick(tickInputs.JumpAndGravityInput, tickInputs.MoveInput, isFirstTickBeingSimulated ? this._inputs[0].MoveVelocityInput : this._movementController.GetMoveVelocityInput(), tickInputs.CameraInput);
             this._animationController.OnTick();
             this._attackController.OnTick(tickInputs.AttackInput);
+            this._damageController.OnTick();
 
             this._currentSimulatedTick++;
 
@@ -413,8 +429,11 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         public ThirdPersonController.CameraState CameraState;
         public PlayerAnimationController.AnimatorState AnimatorState;
         public int AttackState;
+        private FixedString128Bytes _damageStateString;
+        public PlayerDamageControllerDamageState DamageState { get => this.GetDamageState(); }
+        public int DamageStateCount { get => this.GetDamageStateCount(); }
 
-        public TickStates(int tick, ThirdPersonController.JumpAndGravityState jumpAndGravityState, ThirdPersonController.GroundedState groundedState, ThirdPersonController.MoveState moveState, ThirdPersonController.CameraState cameraState, PlayerAnimationController.AnimatorState animatorState, int attackState)
+        public TickStates(int tick, ThirdPersonController.JumpAndGravityState jumpAndGravityState, ThirdPersonController.GroundedState groundedState, ThirdPersonController.MoveState moveState, ThirdPersonController.CameraState cameraState, PlayerAnimationController.AnimatorState animatorState, int attackState, PlayerDamageControllerDamageState damageState)
         {
             this.Tick = tick;
             this.JumpAndGravityState = jumpAndGravityState;
@@ -423,6 +442,39 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
             this.CameraState = cameraState;
             this.AnimatorState = animatorState;
             this.AttackState = attackState;
+            this._damageStateString = "";
+            if (damageState.Count != 0)
+            {
+                foreach (KeyValuePair<ulong, CollisionEvent> keyValPair in damageState)
+                {
+                    this._damageStateString += $"{keyValPair.Key},{keyValPair.Value.Damage}|";
+                }
+            }
+        }
+
+        private int GetDamageStateCount()
+        {
+            if (this._damageStateString == "") { return 0; }
+
+            return this._damageStateString.ToString().Split('|').Count();
+        }
+
+        private PlayerDamageControllerDamageState GetDamageState()
+        {
+            PlayerDamageControllerDamageState damageState = new Dictionary<ulong, CollisionEvent>();
+
+            if (this._damageStateString == "") { return damageState; }
+
+            string[] keyValPairs = this._damageStateString.ToString().Split('|');
+
+            foreach (string keyValPair in keyValPairs)
+            {
+                ulong playerClientId = ulong.Parse(keyValPair.Split(',')[0]);
+                int damage = int.Parse(keyValPair.Split(',')[1]);
+                damageState.Add(playerClientId, new(playerClientId, damage));
+            }
+
+            return damageState;
         }
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -437,6 +489,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 reader.ReadValueSafe(out CameraState);
                 reader.ReadValueSafe(out AnimatorState);
                 reader.ReadValueSafe(out AttackState);
+                reader.ReadValueSafe(out _damageStateString);
             }
             else
             {
@@ -448,6 +501,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 writer.WriteValueSafe(CameraState);
                 writer.WriteValueSafe(AnimatorState);
                 writer.WriteValueSafe(AttackState);
+                writer.WriteValueSafe(_damageStateString);
             }
         }
     }
