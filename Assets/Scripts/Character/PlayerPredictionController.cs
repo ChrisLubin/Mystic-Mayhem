@@ -46,6 +46,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private bool _shouldForceReconcile = false;
     private bool _didReceiveStateFromServer = false;
     private const int _TICK_EXTRAPOLATION_DIFF_THRESHOLD = 5;
+    private const int _RECONCILE_ANIMATION_TICK_THRESHOLD = 2;
 
     // Server
     private Queue<TickInputs> _serverInputQueue;
@@ -58,7 +59,6 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         this._animationController = GetComponent<PlayerAnimationController>();
         this._attackController = GetComponent<PlayerAttackController>();
         this._damageController = GetComponent<PlayerDamageController>();
-        this._serverDummyController = Instantiate(this._serverDummyPrefab, transform.position, Quaternion.identity, null).GetComponent<PlayerServerDummyController>();
     }
 
     private void Start()
@@ -76,6 +76,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
         if (!this.IsOwner)
             OnTickDiffBetweenLocalClientAndServer += this.OnTicksAheadUpdate;
+        else
+            this._serverDummyController = Instantiate(this._serverDummyPrefab, transform.position, Quaternion.identity, null).GetComponent<PlayerServerDummyController>();
     }
 
     public override void OnDestroy()
@@ -124,6 +126,19 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, this._clientLatestServerState.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForLatestServerTick.MoveState.TransformEurlerAngles.y, 0f));
         bool isAnimationDifferent = clientTickStatesForLatestServerTick.AnimatorState.AnimationHash != this._clientLatestServerState.AnimatorState.AnimationHash;
         bool isDamageQueueDifferent = clientTickStatesForLatestServerTick.DamageStateCount != this._clientLatestServerState.DamageStateCount;
+
+        if (!this.IsOwner)
+        {
+            for (int i = -_RECONCILE_ANIMATION_TICK_THRESHOLD; i <= _RECONCILE_ANIMATION_TICK_THRESHOLD; i++)
+            {
+                if (this._clientLatestServerState.Tick + i - _RECONCILE_ANIMATION_TICK_THRESHOLD < 0) { continue; }
+
+                int bufferIndex = (this._clientLatestServerState.Tick + i) % _BUFFER_SIZE;
+                TickStates clientTickStates = this._clientStateBuffer[bufferIndex];
+                if (clientTickStates.AnimatorState.AnimationHash == this._clientLatestServerState.AnimatorState.AnimationHash)
+                    isAnimationDifferent = false;
+            }
+        }
 
         if (positionDistance > _MAX_POSITION_THRESHOLD)
         {
@@ -298,7 +313,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     {
         this._clientLatestServerState = tickStates;
         this._didReceiveStateFromServer = true;
-        this._serverDummyController.SetState(tickStates.MoveState.TransformPosition, tickStates.MoveState.TransformEurlerAngles.y, tickStates.AnimatorState, tickStates.MoveState);
+        if (this.IsOwner)
+            this._serverDummyController.SetState(tickStates.MoveState.TransformPosition, tickStates.MoveState.TransformEurlerAngles.y, tickStates.AnimatorState, tickStates.MoveState);
 
         if (this.IsOwner)
         {
