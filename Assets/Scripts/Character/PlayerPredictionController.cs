@@ -483,8 +483,9 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
             string[] keyValPairs = this._damageStateString.ToString().Split('|');
 
-            foreach (string keyValPair in keyValPairs)
+            for (int i = 0; i < keyValPairs.Length - 1; i++)
             {
+                string keyValPair = keyValPairs[i];
                 ulong playerClientId = ulong.Parse(keyValPair.Split(',')[0]);
                 int damage = int.Parse(keyValPair.Split(',')[1]);
                 damageState.Add(playerClientId, new(playerClientId, damage));
