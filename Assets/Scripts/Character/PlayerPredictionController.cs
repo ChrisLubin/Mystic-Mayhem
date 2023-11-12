@@ -32,6 +32,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private const float _MAX_ROTATION_THRESHOLD = 25f;
     public static event Action<int> OnTickDiffBetweenLocalClientAndServer;
     private static bool _SHOULD_SHOW_LOGS = true;
+    private TickStates[] _clientServerStateBuffer;
+    private int _clientLastServerStateProcessedTick;
 
     // Client
     private TickInputs[] _clientInputBuffer;
@@ -63,6 +65,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
     private void Start()
     {
+        this._clientServerStateBuffer = new TickStates[_BUFFER_SIZE];
         this._clientInputBuffer = new TickInputs[_BUFFER_SIZE];
         this._clientStateBuffer = new TickStates[_BUFFER_SIZE];
         this._serverInputQueue = new Queue<TickInputs>(_BUFFER_SIZE);
@@ -100,7 +103,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     private void OnTicksAheadUpdate(int ticksAhead)
     {
         // Used by non-owner players to determine how far to extrapolate
-        if (Math.Abs(this._nonLocalPlayerTicksAhead - ticksAhead) > _TICK_EXTRAPOLATION_DIFF_THRESHOLD)
+        if (!this.IsHost && this._nonLocalPlayerTicksAhead == 0)
         {
             this._nonLocalPlayerTicksAhead = ticksAhead;
             this._nonOwnerCurrentTick = this._clientLatestServerState.Tick + ticksAhead;
@@ -111,60 +114,64 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         }
     }
 
-    private bool ShouldReconcile()
+    private bool ShouldReconcile(out int reconciledTick)
     {
-        if (this.IsHost) { return false; }
+        if (this.IsHost)
+        {
+            reconciledTick = 0;
+            return false;
+        }
         if (this._shouldForceReconcile)
         {
+            this._clientLastServerStateProcessedTick = this._clientLatestServerState.Tick;
+            reconciledTick = this._clientLatestServerState.Tick;
             this._shouldForceReconcile = false;
             return true;
         }
 
-        int latestServerStateBufferIndex = this._clientLatestServerState.Tick % _BUFFER_SIZE;
-        TickStates clientTickStatesForLatestServerTick = this._clientStateBuffer[latestServerStateBufferIndex];
-        float positionDistance = Vector3.Distance(this._clientLatestServerState.MoveState.TransformPosition, clientTickStatesForLatestServerTick.MoveState.TransformPosition);
-        float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, this._clientLatestServerState.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForLatestServerTick.MoveState.TransformEurlerAngles.y, 0f));
-        bool isAnimationDifferent = clientTickStatesForLatestServerTick.AnimatorState.AnimationHash != this._clientLatestServerState.AnimatorState.AnimationHash;
-        bool isDamageQueueDifferent = clientTickStatesForLatestServerTick.DamageStateCount != this._clientLatestServerState.DamageStateCount;
+        if (this._clientLastServerStateProcessedTick == 0)
+            this._clientLastServerStateProcessedTick = this._clientLatestServerState.Tick - 1;
 
-        if (!this.IsOwner)
+        while (this._clientLastServerStateProcessedTick < this._clientLatestServerState.Tick)
         {
-            for (int i = -_RECONCILE_ANIMATION_TICK_THRESHOLD; i <= _RECONCILE_ANIMATION_TICK_THRESHOLD; i++)
-            {
-                if (this._clientLatestServerState.Tick + i - _RECONCILE_ANIMATION_TICK_THRESHOLD < 0) { continue; }
+            int serverStateBufferIndex = (this._clientLastServerStateProcessedTick + 1) % _BUFFER_SIZE;
+            TickStates clientTickStatesForServerTick = this._clientStateBuffer[serverStateBufferIndex];
+            TickStates serverTickStatesForServerTick = this._clientServerStateBuffer[serverStateBufferIndex];
+            float positionDistance = Vector3.Distance(serverTickStatesForServerTick.MoveState.TransformPosition, clientTickStatesForServerTick.MoveState.TransformPosition);
+            float rotationDistance = Quaternion.Angle(Quaternion.Euler(0f, serverTickStatesForServerTick.MoveState.TransformEurlerAngles.y, 0f), Quaternion.Euler(0f, clientTickStatesForServerTick.MoveState.TransformEurlerAngles.y, 0f));
+            bool isAnimationDifferent = clientTickStatesForServerTick.AnimatorState.AnimationHash != serverTickStatesForServerTick.AnimatorState.AnimationHash;
+            bool isDamageQueueDifferent = clientTickStatesForServerTick.DamageStateCount != serverTickStatesForServerTick.DamageStateCount;
 
-                int bufferIndex = (this._clientLatestServerState.Tick + i) % _BUFFER_SIZE;
-                TickStates clientTickStates = this._clientStateBuffer[bufferIndex];
-                if (clientTickStates.AnimatorState.AnimationHash == this._clientLatestServerState.AnimatorState.AnimationHash)
-                    isAnimationDifferent = false;
+            this._clientLastServerStateProcessedTick++;
+
+            reconciledTick = clientTickStatesForServerTick.Tick;
+            if (positionDistance > _MAX_POSITION_THRESHOLD)
+            {
+                if (_SHOULD_SHOW_LOGS)
+                    this._logger.Log($"Reconciled due to POS on tick {reconciledTick}");
+                return true;
+            }
+            else if (rotationDistance > _MAX_ROTATION_THRESHOLD)
+            {
+                if (_SHOULD_SHOW_LOGS)
+                    this._logger.Log($"Reconciled due to ROTATION on tick {reconciledTick}");
+                return true;
+            }
+            else if (isDamageQueueDifferent)
+            {
+                if (_SHOULD_SHOW_LOGS)
+                    this._logger.Log($"Reconciled due to DAMAGE on tick {reconciledTick}");
+                return true;
+            }
+            else if (isAnimationDifferent)
+            {
+                if (_SHOULD_SHOW_LOGS)
+                    this._logger.Log($"Reconciled due to ANIMATION on tick {reconciledTick}");
+                return true;
             }
         }
 
-        if (positionDistance > _MAX_POSITION_THRESHOLD)
-        {
-            if (_SHOULD_SHOW_LOGS)
-                this._logger.Log($"Reconciled due to POS on tick {this._clientLatestServerState.Tick}");
-            return true;
-        }
-        else if (rotationDistance > _MAX_ROTATION_THRESHOLD)
-        {
-            if (_SHOULD_SHOW_LOGS)
-                this._logger.Log($"Reconciled due to ROTATION on tick {this._clientLatestServerState.Tick}");
-            return true;
-        }
-        else if (isDamageQueueDifferent)
-        {
-            if (_SHOULD_SHOW_LOGS)
-                this._logger.Log($"Reconciled due to DAMAGE on tick {this._clientLatestServerState.Tick}");
-            return true;
-        }
-        else if (isAnimationDifferent)
-        {
-            if (_SHOULD_SHOW_LOGS)
-                this._logger.Log($"Reconciled due to ANIMATION on tick {this._clientLatestServerState.Tick}");
-            return true;
-        }
-
+        reconciledTick = 0;
         return false;
     }
 
@@ -173,21 +180,22 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         if (this.IsOwner)
         {
             // Owner processing
-            if (this.ShouldReconcile())
+            if (this.ShouldReconcile(out int reconciledTick))
             {
-                int latestServerStateBufferIndex = this._clientLatestServerState.Tick % _BUFFER_SIZE;
+                int serverStateBufferIndex = reconciledTick % _BUFFER_SIZE;
 
-                this._movementController.SetJumpAndGravityState(this._clientLatestServerState.JumpAndGravityState);
-                this._movementController.SetGroundedState(this._clientLatestServerState.GroundedState);
-                this._movementController.SetMoveState(this._clientLatestServerState.MoveState);
-                this._movementController.SetCameraState(this._clientLatestServerState.CameraState);
-                this._animationController.SetAnimatorState(this._clientLatestServerState.AnimatorState);
-                this._attackController.SetAttackState(this._clientLatestServerState.AttackState);
-                this._damageController.SetDamageState(this._clientLatestServerState.DamageState);
+                TickStates serverTickStatesForServerTick = this._clientServerStateBuffer[serverStateBufferIndex];
+                this._movementController.SetJumpAndGravityState(serverTickStatesForServerTick.JumpAndGravityState);
+                this._movementController.SetGroundedState(serverTickStatesForServerTick.GroundedState);
+                this._movementController.SetMoveState(serverTickStatesForServerTick.MoveState);
+                this._movementController.SetCameraState(serverTickStatesForServerTick.CameraState);
+                this._animationController.SetAnimatorState(serverTickStatesForServerTick.AnimatorState);
+                this._attackController.SetAttackState(serverTickStatesForServerTick.AttackState);
+                this._damageController.SetDamageState(serverTickStatesForServerTick.DamageState);
 
-                this._clientStateBuffer[latestServerStateBufferIndex] = this._clientLatestServerState;
+                this._clientStateBuffer[serverStateBufferIndex] = serverTickStatesForServerTick;
 
-                int tickToProcess = this._clientLatestServerState.Tick + 1;
+                int tickToProcess = serverTickStatesForServerTick.Tick + 1;
 
                 while (tickToProcess < currentTick)
                 {
@@ -232,12 +240,11 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
         else if (!this.IsOwner && this.IsHost)
         {
             // Host processing
-            int bufferIndex = -1;
 
             while (this._serverInputQueue.Count > 0)
             {
                 TickInputs tickInputs = this._serverInputQueue.Dequeue();
-                bufferIndex = tickInputs.Tick % _BUFFER_SIZE;
+                int bufferIndex = tickInputs.Tick % _BUFFER_SIZE;
 
                 var movementStates = this._movementController.OnTick(tickInputs.JumpAndGravityInput, tickInputs.MoveInput, tickInputs.MoveVelocityInput, tickInputs.CameraInput);
                 PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
@@ -245,32 +252,30 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
                 PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
                 this._serverStateBuffer[bufferIndex] = new(tickInputs.Tick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState);
-            }
-
-            if (bufferIndex != -1)
                 this.SendStateToClientRpc(this._serverStateBuffer[bufferIndex]);
+            }
         }
         else if (!this.IsOwner && !this.IsHost)
         {
             if (this._nonOwnerCurrentTick == 0 || !this._didReceiveStateFromServer) { return; } // Do not predict until we get first state from server
 
             // Non-host client extrapolation
-            if (this.ShouldReconcile())
+            if (this.ShouldReconcile(out int reconciledTick))
             {
-                CanvasDebugController.Instance.IncrementCounter();
-                int latestServerStateBufferIndex = this._clientLatestServerState.Tick % _BUFFER_SIZE;
+                int serverStateBufferIndex = reconciledTick % _BUFFER_SIZE;
 
-                this._movementController.SetJumpAndGravityState(this._clientLatestServerState.JumpAndGravityState);
-                this._movementController.SetGroundedState(this._clientLatestServerState.GroundedState);
-                this._movementController.SetMoveState(this._clientLatestServerState.MoveState);
-                this._movementController.SetCameraState(this._clientLatestServerState.CameraState);
-                this._animationController.SetAnimatorState(this._clientLatestServerState.AnimatorState);
-                this._attackController.SetAttackState(this._clientLatestServerState.AttackState);
-                this._damageController.SetDamageState(this._clientLatestServerState.DamageState);
+                TickStates serverTickStatesForServerTick = this._clientServerStateBuffer[serverStateBufferIndex];
+                this._movementController.SetJumpAndGravityState(serverTickStatesForServerTick.JumpAndGravityState);
+                this._movementController.SetGroundedState(serverTickStatesForServerTick.GroundedState);
+                this._movementController.SetMoveState(serverTickStatesForServerTick.MoveState);
+                this._movementController.SetCameraState(serverTickStatesForServerTick.CameraState);
+                this._animationController.SetAnimatorState(serverTickStatesForServerTick.AnimatorState);
+                this._attackController.SetAttackState(serverTickStatesForServerTick.AttackState);
+                this._damageController.SetDamageState(serverTickStatesForServerTick.DamageState);
 
-                this._clientStateBuffer[latestServerStateBufferIndex] = this._clientLatestServerState;
+                this._clientStateBuffer[serverStateBufferIndex] = serverTickStatesForServerTick;
 
-                int tickToProcess = this._clientLatestServerState.Tick + 1;
+                int tickToProcess = serverTickStatesForServerTick.Tick + 1;
 
                 while (tickToProcess < this._nonOwnerCurrentTick)
                 {
@@ -278,7 +283,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
                     var tickToProcessMovementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
                     PlayerAnimationController.AnimatorState tickToProcessAnimatorState = this._animationController.OnTick();
-                    int tickToProcessAttackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
+                    int tickToProcessAttackState = this._attackController.OnTick(PlayerAttackController.AttackInput.None);
                     PlayerDamageControllerDamageState tickToProcessDamageState = this._damageController.OnTick();
                     TickStates tickToProcessTickStates = new(tickToProcess, tickToProcessMovementStates.Item1, tickToProcessMovementStates.Item2, tickToProcessMovementStates.Item3, tickToProcessMovementStates.Item4, tickToProcessAnimatorState, tickToProcessAttackState, tickToProcessDamageState);
 
@@ -291,7 +296,7 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
 
             var movementStates = this._movementController.OnTick(this._clientLastServerInput.JumpAndGravityInput, this._clientLastServerInput.MoveInput, this._clientLastServerInput.MoveVelocityInput, this._clientLastServerInput.CameraInput);
             PlayerAnimationController.AnimatorState animatorState = this._animationController.OnTick();
-            int attackState = this._attackController.OnTick(this._clientLastServerInput.AttackInput);
+            int attackState = this._attackController.OnTick(PlayerAttackController.AttackInput.None);
             PlayerDamageControllerDamageState damageState = this._damageController.OnTick();
 
             TickStates tickStates = new(this._nonOwnerCurrentTick, movementStates.Item1, movementStates.Item2, movementStates.Item3, movementStates.Item4, animatorState, attackState, damageState);
@@ -311,6 +316,8 @@ public class PlayerPredictionController : NetworkBehaviourWithLogger<PlayerPredi
     [ClientRpc]
     private void SendStateToClientRpc(TickStates tickStates)
     {
+        int bufferIndex = tickStates.Tick % _BUFFER_SIZE;
+        this._clientServerStateBuffer[bufferIndex] = tickStates;
         this._clientLatestServerState = tickStates;
         this._didReceiveStateFromServer = true;
         if (this.IsOwner)
