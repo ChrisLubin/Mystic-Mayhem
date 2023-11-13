@@ -1,23 +1,18 @@
 using System;
-using StarterAssets;
-using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
 {
     private PlayerCameraController _cameraController;
+    private PlayerHealthController _healthController;
     private UnityEngine.InputSystem.PlayerInput _input;
-    private CharacterController _characterController;
-    private ThirdPersonController _thirdPersonController;
 
     public static event Action<ulong, PlayerController> OnSpawn;
 
     private void Awake()
     {
         this._cameraController = GetComponent<PlayerCameraController>();
+        this._healthController = GetComponent<PlayerHealthController>();
         this._input = GetComponent<UnityEngine.InputSystem.PlayerInput>();
-        this._characterController = GetComponent<CharacterController>();
-        this._thirdPersonController = GetComponent<ThirdPersonController>();
     }
 
     public override void OnNetworkSpawn()
@@ -29,8 +24,6 @@ public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
     protected override void OnOwnerNetworkSpawn()
     {
         this._cameraController.OnHoverCameraReached += this.OnHoverCameraReached;
-        this._characterController.enabled = true;
-        this._thirdPersonController.enabled = true;
     }
 
     public override void OnDestroy()
@@ -46,4 +39,6 @@ public class PlayerController : NetworkBehaviorAutoDisable<PlayerController>
     {
         this._input.enabled = true;
     }
+
+    public void TakeDamageServer(int damage) => this._healthController.TakeDamageServer(damage);
 }

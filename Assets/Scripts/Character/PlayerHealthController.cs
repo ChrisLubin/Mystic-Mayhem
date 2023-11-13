@@ -14,6 +14,7 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
     {
         this._networkController = GetComponent<PlayerNetworkController>();
         this._animationController = GetComponent<PlayerAnimationController>();
+        this._networkController.CurrentHealth.OnValueChanged += this.OnHealthChange;
     }
 
     protected override void OnOwnerNetworkSpawn()
@@ -21,12 +22,21 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
         OnLocalPlayerHealthChange?.Invoke(this._networkController.CurrentHealth.Value);
     }
 
+    public override void OnDestroy()
+    {
+        base.OnDestroy();
+        this._networkController.CurrentHealth.OnValueChanged -= this.OnHealthChange;
+    }
+
+    private void OnHealthChange(int _, int currentHealth)
+    {
+        if (this.IsOwner)
+            OnLocalPlayerHealthChange?.Invoke(currentHealth);
+    }
+
     public void TakeDamageLocal(int damage, bool isFromServer = false)
     {
         if (!this.IsOwner || this._animationController.IsParrying) { return; }
-
-        this._networkController.CurrentHealth.Value = Math.Clamp(this._networkController.CurrentHealth.Value - damage, _PLAYER_MIN_HEALTH, PLAYER_MAX_HEALTH);
-        OnLocalPlayerHealthChange?.Invoke(this._networkController.CurrentHealth.Value);
 
         WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
         if (weaponSO == null) { return; }
@@ -35,8 +45,12 @@ public class PlayerHealthController : NetworkBehaviorAutoDisable<PlayerHealthCon
 
     public void TakeDamageServer(int damage)
     {
-        if (this.IsOwner) { return; }
+        if (this._animationController.IsParrying) { return; }
 
-        this._networkController.TakeDamageServerRpc(this.OwnerClientId, damage);
+        if (this.IsHost)
+            this._networkController.CurrentHealth.Value = Math.Clamp(this._networkController.CurrentHealth.Value - damage, _PLAYER_MIN_HEALTH, PLAYER_MAX_HEALTH);
+        WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
+        if (weaponSO == null) { return; }
+        this._animationController.PlayTakeDamageAnimation(weaponSO.TakeDamageFrontId);
     }
 }

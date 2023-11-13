@@ -23,6 +23,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
     public static event Action OnHostDisconnect;
     public static event Action OnError;
     public static bool IsMultiplayer { get; private set; } = false;
+    public static bool IsGameHost { get; private set; } = false;
     public static MultiplayerState State { get; private set; }
     private const int _MAX_PLAYER_COUNT = 7;
     public static string LocalPlayerName { get; private set; }
@@ -90,6 +91,9 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
 
     private async void Update()
     {
+        if ((MultiplayerSystem.State == MultiplayerState.CreatedLobby || MultiplayerSystem.State == MultiplayerState.JoinedLobby) && Input.GetKey(KeyCode.Escape) && Input.GetKey(KeyCode.F1))
+            this.ChangeState(MultiplayerState.LeavingLobby);
+
         if (!MultiplayerSystem.IsMultiplayer || !this.IsHost || this._lobby == null || MultiplayerSystem.State != MultiplayerState.CreatedLobby) { return; }
         this._timeSinceLastLobbyHeartbeat += Time.deltaTime;
 
@@ -168,6 +172,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                     this._lobbyEventCallbacks.PlayerLeft += this.OnPlayerLeftLobby;
                     await LobbyService.Instance.SubscribeToLobbyEventsAsync(this._lobby.Id, this._lobbyEventCallbacks);
                     this._logger.Log($"Subscribed to lobby events");
+                    MultiplayerSystem.IsGameHost = true;
                     this.ChangeState(MultiplayerState.CreatedLobby);
                 }
                 catch (LobbyServiceException e)
@@ -227,6 +232,7 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                     this._lobbyEventCallbacks.PlayerLeft += this.OnPlayerLeftLobby;
                     await LobbyService.Instance.SubscribeToLobbyEventsAsync(this._lobby.Id, this._lobbyEventCallbacks);
                     this._logger.Log($"Subscribed to lobby events");
+                    MultiplayerSystem.IsGameHost = false;
                     this.ChangeState(MultiplayerState.JoinedLobby);
                 }
                 catch (LobbyServiceException e)
@@ -256,6 +262,16 @@ public class MultiplayerSystem : NetworkedStaticInstanceWithLogger<MultiplayerSy
                 break;
             case MultiplayerState.JoinedLobby:
                 MultiplayerSystem.IsMultiplayer = true;
+                break;
+            case MultiplayerState.LeavingLobby:
+                await this.DisposeLobby();
+                NetworkManager.Singleton.Shutdown();
+
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+#endif
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(newState), newState, null);
@@ -433,6 +449,7 @@ public enum MultiplayerState
     CreatedLobby,
     JoiningLobby,
     JoinedLobby,
+    LeavingLobby,
 }
 
 [Serializable]

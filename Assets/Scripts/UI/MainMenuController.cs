@@ -65,6 +65,11 @@ public class MainMenuController : MonoBehaviour
             case MultiplayerState.JoiningLobby:
                 this._loadingText.text = "Joining game...";
                 break;
+            case MultiplayerState.LeavingLobby:
+                this._background.gameObject.SetActive(true);
+                this._loadingText.gameObject.SetActive(true);
+                this._loadingText.text = "Leaving game...";
+                break;
         }
     }
 }

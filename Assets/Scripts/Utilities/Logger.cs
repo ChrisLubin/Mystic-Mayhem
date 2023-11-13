@@ -70,6 +70,12 @@ public abstract class NetworkBehaviourWithLogger<T> : NetworkBehaviour where T :
     {
         this._logger = new Logger(GetType().Name);
     }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        this._logger = new Logger($"{GetType().Name} - {this.OwnerClientId}");
+    }
 }
 
 public abstract class NetworkedStaticInstanceWithLogger<T> : NetworkedStaticInstance<T> where T : NetworkBehaviour

@@ -1,4 +1,8 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections.Generic;
+using Cinemachine;
+using Unity.Netcode;
+using UnityEngine;
 #if ENABLE_INPUT_SYSTEM 
 using UnityEngine.InputSystem;
 #endif
@@ -123,9 +127,11 @@ namespace StarterAssets
         }
 
         private PlayerAnimationController _animationController;
+        private Vector3 _lastPosition;
 
         private void Awake()
         {
+            _lastPosition = transform.position;
             this._animationController = GetComponent<PlayerAnimationController>();
             _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
             _hasAnimator = TryGetComponent(out _animator);
@@ -154,20 +160,6 @@ namespace StarterAssets
             _fallTimeoutDelta = FallTimeout;
         }
 
-        private void Update()
-        {
-            _hasAnimator = TryGetComponent(out _animator);
-
-            JumpAndGravity();
-            GroundedCheck();
-            Move();
-        }
-
-        private void LateUpdate()
-        {
-            CameraRotation();
-        }
-
         private void AssignAnimationIDs()
         {
             _animIDSpeed = Animator.StringToHash("Speed");
@@ -177,117 +169,50 @@ namespace StarterAssets
             _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
         }
 
-        private void GroundedCheck()
+        public (JumpAndGravityState, GroundedState, MoveState, CameraState) OnTick(bool jumpAndGravityInput, MoveInput moveInput, Vector3 moveVelocity, Vector2 cameraInput)
         {
-            // set sphere position, with offset
-            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset,
-                transform.position.z);
-            Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers,
-                QueryTriggerInteraction.Ignore);
+            JumpAndGravityState jumpAndGravityState = JumpAndGravity(jumpAndGravityInput);
+            GroundedState groundedState = GroundedCheck();
+            MoveState moveState = Move(moveInput, moveVelocity);
+            CameraState cameraState = CameraRotation(cameraInput);
 
-            // update animator if using character
-            if (_hasAnimator)
-            {
-                _animator.SetBool(_animIDGrounded, Grounded);
-            }
+            return (jumpAndGravityState, groundedState, moveState, cameraState);
         }
 
-        private void CameraRotation()
+        public bool GetJumpAndGravityInput() => _input.jump;
+        public MoveInput GetMoveInput() => new(_input.sprint, _input.move);
+        public Vector3 GetMoveVelocityInput() => _controller.velocity;
+        public Vector2 GetCameraInput() => _input.look;
+
+        public void SetJumpAndGravityState(JumpAndGravityState state)
         {
-            // if there is an input and camera position is not fixed
-            if (_input.look.sqrMagnitude >= _threshold && !LockCameraPosition)
-            {
-                //Don't multiply mouse input by Time.deltaTime;
-                float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
-
-                _cinemachineTargetYaw += _input.look.x * deltaTimeMultiplier;
-                _cinemachineTargetPitch += _input.look.y * deltaTimeMultiplier;
-            }
-
-            // clamp our rotations so our values are limited 360 degrees
-            _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
-            _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
-
-            // Cinemachine will follow this target
-            CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch + CameraAngleOverride,
-                _cinemachineTargetYaw, 0.0f);
+            _verticalVelocity = state.VerticalVelocity;
+            _jumpTimeoutDelta = state.JumpTimeoutDelta;
+            _fallTimeoutDelta = state.FallTimeoutDelta;
+            _input.jump = state.Jump;
+        }
+        public void SetGroundedState(GroundedState state) => Grounded = state.Grounded;
+        public void SetMoveState(MoveState moveState)
+        {
+            _animationBlend = moveState.AnimationBlend;
+            CinemachineCameraTarget.transform.eulerAngles = moveState.MainCameraEulerAngles;
+            transform.eulerAngles = moveState.TransformEurlerAngles;
+            _rotationVelocity = moveState.RotationVelocity;
+            _verticalVelocity = moveState.VerticalVelocty;
+            transform.position = moveState.TransformPosition;
+            this._lastPosition = moveState.LastPosition;
+        }
+        public void SetCameraState(CameraState state)
+        {
+            _cinemachineTargetYaw = state.CinemachineTargetYaw;
+            _cinemachineTargetPitch = state.CinemachineTargetPitch;
         }
 
-        private void Move()
-        {
-            bool shouldLockPlayerMovement = this._animationController.IsAttacking || this._animationController.IsTakingDamage;
-            bool shouldLockPlayerRotation = this._animationController.IsAttacking && !this._animationController.CanCombo;
+        // Use isSimulating ? payload.jump : _input.jump;
+        // input props - _input.jump, 
+        // state props - _verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump
 
-            // set target speed based on move speed, sprint speed and if sprint is pressed
-            float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
-
-            // a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
-
-            // note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
-            // if there is no input, set the target speed to 0
-            if (_input.move == Vector2.zero || shouldLockPlayerMovement) targetSpeed = 0.0f;
-
-            // a reference to the players current horizontal velocity
-            float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
-
-            float speedOffset = 0.1f;
-            float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
-
-            // accelerate or decelerate to target speed
-            if (currentHorizontalSpeed < targetSpeed - speedOffset ||
-                currentHorizontalSpeed > targetSpeed + speedOffset)
-            {
-                // creates curved result rather than a linear one giving a more organic speed change
-                // note T in Lerp is clamped, so we don't need to clamp our speed
-                _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude,
-                    Time.deltaTime * SpeedChangeRate);
-
-                // round speed to 3 decimal places
-                _speed = Mathf.Round(_speed * 1000f) / 1000f;
-            }
-            else
-            {
-                _speed = targetSpeed;
-            }
-
-            _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
-            if (_animationBlend < 0.01f) _animationBlend = 0f;
-
-            // normalise input direction
-            Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
-
-            // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
-            // if there is a move input rotate player when the player is moving
-            if (_input.move != Vector2.zero)
-            {
-                _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
-                                  _mainCamera.transform.eulerAngles.y;
-
-                if (shouldLockPlayerRotation)
-                    _targetRotation = transform.eulerAngles.y;
-
-                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
-                    RotationSmoothTime);
-
-                // rotate to face input direction relative to camera position
-                transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
-            }
-
-            Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
-
-            // move the player
-            _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) +
-                             new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
-
-            // update animator if using character
-            if (_hasAnimator)
-            {
-                _animator.SetFloat(_animIDSpeed, _animationBlend);
-                _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
-            }
-        }
-
-        private void JumpAndGravity()
+        private JumpAndGravityState JumpAndGravity(bool jumpInput)
         {
             if (Grounded)
             {
@@ -308,7 +233,7 @@ namespace StarterAssets
                 }
 
                 // Jump
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f)
+                if (jumpInput && _jumpTimeoutDelta <= 0.0f)
                 {
                     // the square root of H * -2 * G = how much velocity needed to reach desired height
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
@@ -323,7 +248,7 @@ namespace StarterAssets
                 // jump timeout
                 if (_jumpTimeoutDelta >= 0.0f)
                 {
-                    _jumpTimeoutDelta -= Time.deltaTime;
+                    _jumpTimeoutDelta -= TickSystem.MIN_TIME_BETWEEN_TICKS;
                 }
             }
             else
@@ -334,7 +259,7 @@ namespace StarterAssets
                 // fall timeout
                 if (_fallTimeoutDelta >= 0.0f)
                 {
-                    _fallTimeoutDelta -= Time.deltaTime;
+                    _fallTimeoutDelta -= TickSystem.MIN_TIME_BETWEEN_TICKS;
                 }
                 else
                 {
@@ -352,8 +277,142 @@ namespace StarterAssets
             // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
             if (_verticalVelocity < _terminalVelocity)
             {
-                _verticalVelocity += Gravity * Time.deltaTime;
+                _verticalVelocity += Gravity * TickSystem.MIN_TIME_BETWEEN_TICKS;
             }
+
+            return new(_verticalVelocity, _jumpTimeoutDelta, _fallTimeoutDelta, _input.jump);
+        }
+
+        // Set grounded on first tick of re-simulation window
+        // input props - 
+        // state props - transform.position, grounded
+
+        private GroundedState GroundedCheck()
+        {
+            // set sphere position, with offset
+            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset,
+                transform.position.z);
+            Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers,
+                QueryTriggerInteraction.Ignore);
+
+            // update animator if using character
+            if (_hasAnimator)
+            {
+                _animator.SetBool(_animIDGrounded, Grounded);
+            }
+
+            return new(Grounded);
+        }
+
+        // Set transform.position to previous tick's state for the first tick during simulation window.
+        // If doing simulation for first tick during resimulation window use velocity = isSimulating ? (previous tick state velocity) : _controller.velocity
+        // Make sure to set animationController state before simulating this to be accurate. (Set this tick's animation state to the previous tick's animation state)
+        // input props - _input.sprint, _input.move (2 value are either -1f, 0f, or 1f), 
+        // state props - IsAttacking, IsTakingDamage, CanCombo, _controller.velocity (only use x & y even tho it's Vector3), _animationBlend, CinemachineCameraTarget.transform.eulerAngles.y, transform.eulerAngles.y, _rotationVelocity, _verticalVelocity
+
+        private MoveState Move(MoveInput moveInput, Vector3 _)
+        {
+            Vector3 velocity = (transform.position - this._lastPosition) * TickSystem.MIN_TIME_BETWEEN_TICKS;
+            // Uncomment when done with tests
+            bool shouldLockPlayerMovement = this._animationController.IsAttacking || this._animationController.IsTakingDamage;
+            bool shouldLockPlayerRotation = this._animationController.IsAttacking && !this._animationController.CanCombo;
+
+            // set target speed based on move speed, sprint speed and if sprint is pressed
+            float targetSpeed = moveInput.Sprint ? SprintSpeed : MoveSpeed;
+
+            // a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
+
+            // note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
+            // if there is no input, set the target speed to 0
+            if (moveInput.Move == Vector2.zero || shouldLockPlayerMovement) targetSpeed = 0.0f;
+
+            // a reference to the players current horizontal velocity
+            float currentHorizontalSpeed = new Vector3(velocity.x, 0.0f, velocity.z).magnitude;
+
+            float speedOffset = 0.5f;
+            float inputMagnitude = _input.analogMovement ? moveInput.Move.magnitude : 1f;
+
+            // accelerate or decelerate to target speed
+            if (currentHorizontalSpeed < targetSpeed - speedOffset ||
+                currentHorizontalSpeed > targetSpeed + speedOffset)
+            {
+                // creates curved result rather than a linear one giving a more organic speed change
+                // note T in Lerp is clamped, so we don't need to clamp our speed
+                _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude,
+                    TickSystem.MIN_TIME_BETWEEN_TICKS * SpeedChangeRate);
+
+                // round speed to 3 decimal places
+                _speed = Mathf.Round(_speed * 1000f) / 1000f;
+            }
+            else
+            {
+                _speed = targetSpeed;
+            }
+
+            _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, TickSystem.MIN_TIME_BETWEEN_TICKS * SpeedChangeRate);
+            if (_animationBlend < 0.01f) _animationBlend = 0f;
+
+            // normalise input direction
+            Vector3 inputDirection = new Vector3(moveInput.Move.x, 0.0f, moveInput.Move.y).normalized;
+
+            // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
+            // if there is a move input rotate player when the player is moving
+            if (moveInput.Move != Vector2.zero)
+            {
+                _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
+                                  CinemachineCameraTarget.transform.eulerAngles.y;
+
+                if (shouldLockPlayerRotation)
+                    _targetRotation = transform.eulerAngles.y;
+
+                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
+                    RotationSmoothTime);
+
+                // rotate to face input direction relative to camera position
+                transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
+            }
+
+            Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
+
+            // move the player
+            _controller.Move(targetDirection.normalized * (_speed * TickSystem.MIN_TIME_BETWEEN_TICKS) +
+                             new Vector3(0.0f, _verticalVelocity, 0.0f) * TickSystem.MIN_TIME_BETWEEN_TICKS);
+
+            // update animator if using character
+            if (_hasAnimator)
+            {
+                _animator.SetFloat(_animIDSpeed, _animationBlend);
+                _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
+            }
+
+            return new(_controller.velocity, _animationBlend, CinemachineCameraTarget.transform.eulerAngles, transform.eulerAngles, _rotationVelocity, _verticalVelocity, transform.position, this._lastPosition);
+        }
+
+        // Don't forget to do _input.look = Vector2.zero; after done simulating
+        // input props - _input.look, 
+        // state props - _cinemachineTargetYaw, _cinemachineTargetPitch,
+
+        private CameraState CameraRotation(Vector2 lookInput)
+        {
+            // // if there is an input and camera position is not fixed
+            if (lookInput.sqrMagnitude >= _threshold && !LockCameraPosition)
+            {
+                //Don't multiply mouse input by Time.deltaTime;
+                float deltaTimeMultiplier = true ? 1.0f : TickSystem.MIN_TIME_BETWEEN_TICKS;
+
+                _cinemachineTargetYaw += lookInput.x * deltaTimeMultiplier;
+                _cinemachineTargetPitch += lookInput.y * deltaTimeMultiplier;
+            }
+
+            // clamp our rotations so our values are limited 360 degrees
+            _cinemachineTargetYaw = ClampAngle(_cinemachineTargetYaw, float.MinValue, float.MaxValue);
+            _cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
+
+            // Cinemachine will follow this target
+            CinemachineCameraTarget.transform.rotation = Quaternion.Euler(_cinemachineTargetPitch + CameraAngleOverride,
+                _cinemachineTargetYaw, 0.0f);
+
+            return new(_cinemachineTargetYaw, _cinemachineTargetPitch);
         }
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
@@ -383,7 +442,7 @@ namespace StarterAssets
             {
                 if (FootstepAudioClips.Length > 0)
                 {
-                    var index = Random.Range(0, FootstepAudioClips.Length);
+                    var index = UnityEngine.Random.Range(0, FootstepAudioClips.Length);
                     AudioSource.PlayClipAtPoint(FootstepAudioClips[index], transform.TransformPoint(_controller.center), FootstepAudioVolume);
                 }
             }
@@ -394,6 +453,179 @@ namespace StarterAssets
             if (animationEvent.animatorClipInfo.weight > 0.5f)
             {
                 AudioSource.PlayClipAtPoint(LandingAudioClip, transform.TransformPoint(_controller.center), FootstepAudioVolume);
+            }
+        }
+
+        [Serializable]
+        public struct MoveInput : INetworkSerializable
+        {
+            public bool Sprint;
+            public Vector2 Move;
+
+            public MoveInput(bool sprint, Vector2 move)
+            {
+                this.Sprint = sprint;
+                this.Move = move;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Sprint);
+                    reader.ReadValueSafe(out Move);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Sprint);
+                    writer.WriteValueSafe(Move);
+                }
+            }
+        }
+
+        [Serializable]
+        public struct JumpAndGravityState : INetworkSerializable
+        {
+            public float VerticalVelocity;
+            public float JumpTimeoutDelta;
+            public float FallTimeoutDelta;
+            public bool Jump;
+
+            public JumpAndGravityState(float verticalVelocity, float jumpTimeoutDelta, float fallTimeoutDelta, bool jump)
+            {
+                this.VerticalVelocity = verticalVelocity;
+                this.JumpTimeoutDelta = jumpTimeoutDelta;
+                this.FallTimeoutDelta = fallTimeoutDelta;
+                this.Jump = jump;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out VerticalVelocity);
+                    reader.ReadValueSafe(out JumpTimeoutDelta);
+                    reader.ReadValueSafe(out FallTimeoutDelta);
+                    reader.ReadValueSafe(out Jump);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(VerticalVelocity);
+                    writer.WriteValueSafe(JumpTimeoutDelta);
+                    writer.WriteValueSafe(FallTimeoutDelta);
+                    writer.WriteValueSafe(Jump);
+                }
+            }
+        }
+
+        [Serializable]
+        public struct GroundedState : INetworkSerializable
+        {
+            public bool Grounded;
+
+            public GroundedState(bool grounded)
+            {
+                this.Grounded = grounded;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Grounded);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Grounded);
+                }
+            }
+        }
+
+        [Serializable]
+        public struct MoveState : INetworkSerializable
+        {
+            public Vector3 Velocity;
+            public float AnimationBlend;
+            public Vector3 MainCameraEulerAngles;
+            public Vector3 TransformEurlerAngles;
+            public float RotationVelocity;
+            public float VerticalVelocty;
+            public Vector3 TransformPosition;
+            public Vector3 LastPosition;
+
+            public MoveState(Vector3 velocty, float animationBlend, Vector3 mainCamEulerAngles, Vector3 transformEurlerAngles, float rotationVelocity, float verticalVelocity, Vector3 transformPosition, Vector3 lastPosition)
+            {
+                this.Velocity = velocty;
+                this.AnimationBlend = animationBlend;
+                this.MainCameraEulerAngles = mainCamEulerAngles;
+                this.TransformEurlerAngles = transformEurlerAngles;
+                this.RotationVelocity = rotationVelocity;
+                this.VerticalVelocty = verticalVelocity;
+                this.TransformPosition = transformPosition;
+                this.LastPosition = lastPosition;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out Velocity);
+                    reader.ReadValueSafe(out AnimationBlend);
+                    reader.ReadValueSafe(out MainCameraEulerAngles);
+                    reader.ReadValueSafe(out TransformEurlerAngles);
+                    reader.ReadValueSafe(out RotationVelocity);
+                    reader.ReadValueSafe(out VerticalVelocty);
+                    reader.ReadValueSafe(out TransformPosition);
+                    reader.ReadValueSafe(out LastPosition);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(Velocity);
+                    writer.WriteValueSafe(AnimationBlend);
+                    writer.WriteValueSafe(MainCameraEulerAngles);
+                    writer.WriteValueSafe(TransformEurlerAngles);
+                    writer.WriteValueSafe(RotationVelocity);
+                    writer.WriteValueSafe(VerticalVelocty);
+                    writer.WriteValueSafe(TransformPosition);
+                    writer.WriteValueSafe(LastPosition);
+                }
+            }
+        }
+
+        [Serializable]
+        public struct CameraState : INetworkSerializable
+        {
+            public float CinemachineTargetYaw;
+            public float CinemachineTargetPitch;
+
+            public CameraState(float cinemachineTargetYaw, float cinemachineTargetPitch)
+            {
+                this.CinemachineTargetYaw = cinemachineTargetYaw;
+                this.CinemachineTargetPitch = cinemachineTargetPitch;
+            }
+
+            public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                if (serializer.IsReader)
+                {
+                    var reader = serializer.GetFastBufferReader();
+                    reader.ReadValueSafe(out CinemachineTargetYaw);
+                    reader.ReadValueSafe(out CinemachineTargetPitch);
+                }
+                else
+                {
+                    var writer = serializer.GetFastBufferWriter();
+                    writer.WriteValueSafe(CinemachineTargetYaw);
+                    writer.WriteValueSafe(CinemachineTargetPitch);
+                }
             }
         }
     }

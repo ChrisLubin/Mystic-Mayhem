@@ -1,6 +1,8 @@
+using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisable<PlayerMeleeWeaponDamageColliderController>
+public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviour
 {
     private PlayerAnimationController _animationController;
     private PlayerNetworkController _networkController;
@@ -15,41 +17,46 @@ public class PlayerMeleeWeaponDamageColliderController : NetworkBehaviorAutoDisa
         this._playerColliders = GetComponents<Collider>();
     }
 
-    protected override void OnOwnerNetworkSpawn()
+    public override void OnNetworkSpawn()
     {
-        this._weapon.OnCollide += this.OnWeaponTriggerEnter;
-
-        foreach (Collider collider in this._playerColliders)
-        {
-            Physics.IgnoreCollision(collider, this._weapon.GetCollider());
-        }
+        base.OnNetworkSpawn();
+        this._weapon.SetIgnoreColliders(this._playerColliders);
     }
 
-    public override void OnDestroy()
+    // Call from PlayerDamageController instead of PlayerPredictionController
+    public CollisionEvent[] OnTick()
     {
-        base.OnDestroy();
-
-        if (this.IsOwner)
-            this._weapon.OnCollide -= this.OnWeaponTriggerEnter;
-    }
-
-    private void FixedUpdate()
-    {
-        if (!this.IsOwner) { return; }
-
-        if (this._animationController.CanDealMeleeDamage == this._weapon.IsEnabled) { return; }
-
         this._weapon.SetEnabled(this._animationController.CanDealMeleeDamage);
+        if (!this._animationController.CanDealMeleeDamage) { return null; }
+
+        Collider[] colliders = this._weapon.CheckCollisions(LayerMask.GetMask(Constants.LayerNames.Player));
+        if (colliders == null || colliders.Length == 0) { return null; }
+
+        List<CollisionEvent> collisionEvents = new();
+
+        foreach (Collider collider in colliders)
+        {
+            if (collider.tag != Constants.TagNames.Damagable) { continue; }
+            // collider.TryGetComponent<IDamageable>(out IDamageable damageable); // Refactor later so we have the ability to hit possible NPCs
+            if (!collider.TryGetComponent<PlayerNetworkController>(out PlayerNetworkController networkController)) { continue; }
+
+            WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
+            int damage = this._animationController.CurrentAttackId == weaponSO.HeavyAttackOneId ? weaponSO.HeavyAttackDamage : weaponSO.LightAttackDamage;
+            collisionEvents.Add(new(networkController.OwnerClientId, damage));
+        }
+
+        return collisionEvents.ToArray();
     }
 
-    private void OnWeaponTriggerEnter(Collider other)
+    public struct CollisionEvent
     {
-        if (other.tag != Constants.TagNames.Damagable) { return; }
-        other.TryGetComponent<IDamageable>(out IDamageable damageable);
-        if (damageable == null) { return; }
+        public ulong PlayerClientId;
+        public int Damage;
 
-        WeaponSO weaponSO = ResourceSystem.GetWeapon(this._networkController.CurrentWeaponName.Value);
-        int damage = this._animationController.CurrentAttackId == weaponSO.HeavyAttackOneId ? weaponSO.HeavyAttackDamage : weaponSO.LightAttackDamage;
-        damageable.TakeDamageServer(damage);
+        public CollisionEvent(ulong playerClientId, int damage)
+        {
+            this.PlayerClientId = playerClientId;
+            this.Damage = damage;
+        }
     }
 }

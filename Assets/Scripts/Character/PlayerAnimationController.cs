@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
 
 public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimationController>
@@ -31,18 +34,22 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     private int _isTakingDamageHash;
     private int _takeDamageIdHash;
 
-    public bool IsParrying { get => this._animator.GetBool(this._isParryingHash); }
-    public bool CanBeParried { get => this._animator.GetBool(this._canBeParriedHash); }
-    public bool CanCombo { get => this._animator.GetBool(this._canComboHash); }
-    public bool CanDealMeleeDamage { get => this._animator.GetBool(this._canDealMeleeDamageHash); }
-    public bool IsAttacking { get => this._animator.GetBool(this._isAttackingHash); }
-    public bool IsTakingDamage { get => this._animator.GetBool(this._isTakingDamageHash); }
-    public int CurrentAttackId { get => this._animator.GetInteger(this._attackIdHash); }
+    public bool IsParrying { get => this.GetBool(this._isParryingHash); }
+    public bool CanBeParried { get => this.GetBool(this._canBeParriedHash); }
+    public bool CanCombo { get => this.GetBool(this._canComboHash); }
+    public bool CanDealMeleeDamage { get => this.GetBool(this._canDealMeleeDamageHash); }
+    public bool IsAttacking { get => this.GetBool(this._isAttackingHash); }
+    public bool IsTakingDamage { get => this.GetBool(this._isTakingDamageHash); }
+    public int CurrentAttackId { get => this.GetInteger(this._attackIdHash); }
+
+    public event Action OnReachedDamageFrame;
+    public event Action OnAnimationInterrupted;
 
     protected override void Awake()
     {
         base.Awake();
         this._animator = GetComponent<Animator>();
+        this._animator.speed = 0f;
         this._isParryingHash = Animator.StringToHash(_IS_PARRYING_PARAMETER);
         this._canBeParriedHash = Animator.StringToHash(_CAN_BE_PARRIED_PARAMETER);
         this._parryIdHash = Animator.StringToHash(_PARRY_ID_PARAMETER);
@@ -55,9 +62,37 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this._takeDamageIdHash = Animator.StringToHash(_TAKE_DAMAGE_ID_PARAMETER);
     }
 
+    public AnimatorState OnTick()
+    {
+        this._animator.speed = 1f;
+        this._animator.Update(TickSystem.MIN_TIME_BETWEEN_TICKS);
+        this._animator.speed = 0f;
+
+        int layerIndex = this._animator.GetCurrentAnimatorClipInfo(1).Count() == 0 ? 0 : 1;
+        AnimatorStateInfo clipState = this._animator.GetCurrentAnimatorStateInfo(layerIndex);
+        return new AnimatorState(clipState.fullPathHash, clipState.normalizedTime, this.GetInteger(this._parryIdHash), this.GetBool(this._isParryingHash), this.GetBool(this._canBeParriedHash), this.GetBool(this._canComboHash), this.GetBool(this._isCanComboWindowOverHash), this.GetBool(this._canDealMeleeDamageHash), this.GetBool(this._isAttackingHash), this.GetInteger(this._attackIdHash), this.GetBool(this._isTakingDamageHash), this.GetInteger(this._takeDamageIdHash), layerIndex == 0);
+    }
+
+    public void SetAnimatorState(AnimatorState state)
+    {
+        this._animator.speed = 1f;
+        this._animator.Play(state.AnimationHash, -1, state.AnimationNormalizedTime);
+        this._animator.Update(0f);
+        this.SetInteger(this._parryIdHash, state.ParryId);
+        this.SetBool(this._isParryingHash, state.IsParrying);
+        this.SetBool(this._canBeParriedHash, state.CanBeParried);
+        this.SetBool(this._canComboHash, state.CanCombo);
+        this.SetBool(this._isCanComboWindowOverHash, state.IsCanComboWindowOver);
+        this.SetBool(this._canDealMeleeDamageHash, state.CanDealMeleeDamage);
+        this.SetBool(this._isAttackingHash, state.IsAttacking);
+        this.SetInteger(this._attackIdHash, state.AttackId);
+        this.SetBool(this._isTakingDamageHash, state.IsTakingDamage);
+        this.SetInteger(this._takeDamageIdHash, state.TakeDamageId);
+        this._animator.speed = 0f;
+    }
+
     public void PlayAttackAnimation(int attackId, bool enableRootMotion = false)
     {
-        if (!this.IsOwner) { return; }
         if (!this._validAttackIds.TryGetValue(attackId, out _))
         {
             this._logger.Log("Attack not defined!", Logger.LogLevel.Warning);
@@ -70,7 +105,6 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
 
     public void PlayTakeDamageAnimation(int takeDamageId, bool enableRootMotion = false)
     {
-        if (!this.IsOwner) { return; }
         if (!this._validTakeDamageIds.TryGetValue(takeDamageId, out _))
         {
             this._logger.Log("Take damage not defined!", Logger.LogLevel.Warning);
@@ -83,7 +117,6 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
 
     public void PlayParryAnimation(int parryId, bool isBeingParried, bool enableRootMotion = false)
     {
-        if (!this.IsOwner) { return; }
         if (!this._validDoParryIds.TryGetValue(parryId, out _))
         {
             this._logger.Log("Parry not defined!", Logger.LogLevel.Warning);
@@ -95,25 +128,32 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
         this.SetInteger(this._parryIdHash, parryId);
     }
 
-    private void SetBool(int hash, bool newValue, bool hasToBeOwner = true)
+    private bool GetBool(int hash) => this._animator.GetBool(hash);
+    private int GetInteger(int hash) => this._animator.GetInteger(hash);
+
+    private void SetBool(int hash, bool newValue)
     {
-        if (!this.IsOwner && hasToBeOwner) { return; }
-        bool currentValue = this._animator.GetBool(hash);
+        bool currentValue = this.GetBool(hash);
         if (currentValue == newValue) { return; }
         this._animator.SetBool(hash, newValue);
     }
 
-    private void SetInteger(int hash, int newValue, bool hasToBeOwner = true)
+    private void SetInteger(int hash, int newValue)
     {
-        if (!this.IsOwner && hasToBeOwner) { return; }
-        int currentValue = this._animator.GetInteger(hash);
+        int currentValue = this.GetInteger(hash);
         if (currentValue == newValue) { return; }
         this._animator.SetInteger(hash, newValue);
     }
 
+    public void AnimationInterrupted() => this.OnAnimationInterrupted?.Invoke();
+
     // Called from animation events
     private void EnableCanDealMeleeDamage() => this.SetBool(this._canDealMeleeDamageHash, true);
-    private void DisableCanDealMeleeDamage() => this.SetBool(this._canDealMeleeDamageHash, false);
+    private void DisableCanDealMeleeDamage()
+    {
+        this.SetBool(this._canDealMeleeDamageHash, false);
+        this.OnReachedDamageFrame?.Invoke();
+    }
     private void EnableCanCombo() => this.SetBool(this._canComboHash, true);
     private void DisableCanCombo()
     {
@@ -122,4 +162,77 @@ public class PlayerAnimationController : NetworkBehaviourWithLogger<PlayerAnimat
     }
     private void EnableCanBeParried() => this.SetBool(this._canBeParriedHash, true);
     private void DisableCanBeParried() => this.SetBool(this._canBeParriedHash, false);
+
+    [Serializable]
+    public struct AnimatorState : INetworkSerializable
+    {
+        public int AnimationHash;
+        public float AnimationNormalizedTime;
+        public int ParryId;
+        public bool IsParrying;
+        public bool CanBeParried;
+        public bool CanCombo;
+        public bool IsCanComboWindowOver;
+        public bool CanDealMeleeDamage;
+        public bool IsAttacking;
+        public int AttackId;
+        public bool IsTakingDamage;
+        public int TakeDamageId;
+        public bool IsLayerIndexIsZero; // Only used to visualize server version of player
+
+        public AnimatorState(int animationHash, float animationNormalizedTime, int parryId, bool isParrying, bool canBeParried, bool canCombo, bool isCanComboWindowOver, bool CanDealMeleeDamage, bool IsAttacking, int attackId, bool isTakingDamage, int takeDamageId, bool isLayerIndexZero)
+        {
+            this.AnimationHash = animationHash;
+            this.AnimationNormalizedTime = animationNormalizedTime;
+            this.ParryId = parryId;
+            this.IsParrying = isParrying;
+            this.CanBeParried = canBeParried;
+            this.CanCombo = canCombo;
+            this.IsCanComboWindowOver = isCanComboWindowOver;
+            this.CanDealMeleeDamage = CanDealMeleeDamage;
+            this.IsAttacking = IsAttacking;
+            this.AttackId = attackId;
+            this.IsTakingDamage = isTakingDamage;
+            this.TakeDamageId = takeDamageId;
+            this.IsLayerIndexIsZero = isLayerIndexZero;
+        }
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            if (serializer.IsReader)
+            {
+                var reader = serializer.GetFastBufferReader();
+                reader.ReadValueSafe(out AnimationHash);
+                reader.ReadValueSafe(out AnimationNormalizedTime);
+                reader.ReadValueSafe(out ParryId);
+                reader.ReadValueSafe(out IsParrying);
+                reader.ReadValueSafe(out CanBeParried);
+                reader.ReadValueSafe(out CanCombo);
+                reader.ReadValueSafe(out IsCanComboWindowOver);
+                reader.ReadValueSafe(out CanDealMeleeDamage);
+                reader.ReadValueSafe(out IsAttacking);
+                reader.ReadValueSafe(out AttackId);
+                reader.ReadValueSafe(out IsTakingDamage);
+                reader.ReadValueSafe(out TakeDamageId);
+                reader.ReadValueSafe(out IsLayerIndexIsZero);
+            }
+            else
+            {
+                var writer = serializer.GetFastBufferWriter();
+                writer.WriteValueSafe(AnimationHash);
+                writer.WriteValueSafe(AnimationNormalizedTime);
+                writer.WriteValueSafe(ParryId);
+                writer.WriteValueSafe(IsParrying);
+                writer.WriteValueSafe(CanBeParried);
+                writer.WriteValueSafe(CanCombo);
+                writer.WriteValueSafe(IsCanComboWindowOver);
+                writer.WriteValueSafe(CanDealMeleeDamage);
+                writer.WriteValueSafe(IsAttacking);
+                writer.WriteValueSafe(AttackId);
+                writer.WriteValueSafe(IsTakingDamage);
+                writer.WriteValueSafe(TakeDamageId);
+                writer.WriteValueSafe(IsLayerIndexIsZero);
+            }
+        }
+    }
 }

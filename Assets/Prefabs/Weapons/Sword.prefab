@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 4299937776886465220}
   - component: {fileID: 4306580797346171886}
   - component: {fileID: 4318677742944824182}
-  - component: {fileID: 1318910781431847097}
   - component: {fileID: 1462531853379642494}
   m_Layer: 0
   m_Name: Sword
@@ -85,19 +84,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!65 &1318910781431847097
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4303496384816670106}
-  m_Material: {fileID: 0}
-  m_IsTrigger: 1
-  m_Enabled: 0
-  serializedVersion: 2
-  m_Size: {x: 0.057805482, y: 1.0932856, z: 0.30449143}
-  m_Center: {x: 0.0000022246702, y: 0.62905383, z: -0.00000041404056}
 --- !u!114 &1462531853379642494
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -110,3 +96,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9462d63e4779e6847bbafbf6c663245d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _collisionStartOffset: 0.7
+  _distance: 0.45
+  _lerpSteps: 5

@@ -6,8 +6,8 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
     private PlayerNetworkController _networkController;
     private PlayerParryController _parryController;
 
+    private AttackInput _attackInput = AttackInput.None;
     private int _lastAttackId;
-    private int _lastAttackInputFrame; // Used so only 1 attack can be sent to animator per Update frame
 
     protected override void Awake()
     {
@@ -17,17 +17,37 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._parryController = GetComponent<PlayerParryController>();
     }
 
-    private void FixedUpdate()
+    public int OnTick(AttackInput input)
     {
-        if (!this.IsOwner || this._animationController.IsTakingDamage || this._lastAttackInputFrame == Time.frameCount || (this._animationController.IsAttacking && !this._animationController.CanCombo)) { return; }
-        if (!Input.GetKeyDown(KeyCode.Mouse0) && !Input.GetKeyDown(KeyCode.Mouse1)) { return; }
-        this._lastAttackInputFrame = Time.frameCount;
+        if (this._animationController.IsTakingDamage || (this._animationController.IsAttacking && !this._animationController.CanCombo))
+            return this._lastAttackId;
 
-        if (Input.GetKeyDown(KeyCode.Mouse0))
+        // Delete after finalizing CCP for parries
+        // if (this.IsOwner && !this._animationController.IsAttacking && !this._animationController.IsParrying && this._parryController.CanParry())
+        // {
+        //     this._parryController.DoParry();
+        //     return this._lastAttackId;
+        // }
+
+        if (input == AttackInput.None)
+            return this._lastAttackId;
+
+        if (input == AttackInput.LeftClick)
             this.HandleLightAttack(this._networkController.CurrentWeaponName.Value);
-        else if (Input.GetKeyDown(KeyCode.Mouse1))
+        else if (input == AttackInput.RightClick)
             this.HandleHeavyAttack(this._networkController.CurrentWeaponName.Value);
+
+        return this._lastAttackId;
     }
+
+    public AttackInput GetAttackInput()
+    {
+        AttackInput latestInput = this._attackInput;
+        this._attackInput = AttackInput.None;
+        return latestInput;
+    }
+
+    public void SetAttackState(int lastAttackState) => this._lastAttackId = lastAttackState;
 
     public void HandleLightAttack(WeaponName weaponName)
     {
@@ -48,6 +68,7 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, true);
 
+        if (!this.IsOwner) { return; }
         if (this._animationController.CanCombo)
             this._logger.Log(attackId + " - Light Combo");
         else
@@ -77,9 +98,27 @@ public class PlayerAttackController : NetworkBehaviourWithLogger<PlayerAttackCon
         this._lastAttackId = attackId;
         this._animationController.PlayAttackAnimation(attackId, false);
 
+        if (!this.IsOwner) { return; }
         if (this._animationController.CanCombo)
             this._logger.Log(attackId + " - Heavy Combo");
         else
             this._logger.Log(attackId);
+    }
+
+    private void Update()
+    {
+        if (this._attackInput != AttackInput.None) { return; }
+
+        if (Input.GetKeyDown(KeyCode.Mouse0))
+            this._attackInput = AttackInput.LeftClick;
+        else if (Input.GetKeyDown(KeyCode.Mouse1))
+            this._attackInput = AttackInput.RightClick;
+    }
+
+    public enum AttackInput
+    {
+        None,
+        LeftClick,
+        RightClick
     }
 }
